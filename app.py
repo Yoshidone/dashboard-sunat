@@ -240,7 +240,7 @@ if excel_file and (zip_file or txt_files):
                 try:
 
                     # =================================================
-                    # CONVERTIR TXT A TABLA
+                    # TXT A TABLA
                     # =================================================
 
                     df_txt = pd.read_csv(
@@ -257,7 +257,7 @@ if excel_file and (zip_file or txt_files):
                     # VALIDAR COLUMNAS
                     # =================================================
 
-                    if len(df_txt.columns) < 14:
+                    if len(df_txt.columns) < 13:
 
                         st.warning(
                             f"{nombre_archivo} no tiene suficientes columnas"
@@ -266,15 +266,14 @@ if excel_file and (zip_file or txt_files):
                         return
 
                     # =================================================
-                    # RENOMBRAR COLUMNAS
+                    # COLUMNAS REALES DEL TXT
                     # =================================================
 
                     columnas = {
 
-                        5: "Serie del CDP",
+                        7: "Serie del CDP",
                         9: "Nro CP o Doc. Nro Inicial (Rango)",
-                        12: "Tipo Doc",
-                        13: "Nro Doc Identidad"
+                        12: "Nro Doc Identidad"
 
                     }
 
