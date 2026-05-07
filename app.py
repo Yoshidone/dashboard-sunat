@@ -187,6 +187,7 @@ if excel_file and (zip_file or txt_files):
                 df_excel[col_ruc]
                 .astype(str)
                 .str.strip()
+                .str.lstrip("0")
             )
 
             df_excel[col_serie] = (
@@ -200,7 +201,9 @@ if excel_file and (zip_file or txt_files):
                 df_excel[col_comprobante]
                 .astype(str)
                 .str.replace(r"\.0$", "", regex=True)
+                .str.replace("-", "")
                 .str.strip()
+                .str.lstrip("0")
             )
 
             # =====================================================
@@ -242,20 +245,50 @@ if excel_file and (zip_file or txt_files):
 
                         partes = linea.split("|")
 
-                        if len(partes) < 11:
+                        # evitar líneas cortas
+                        if len(partes) < 14:
                             continue
 
                         try:
 
-                            serie = str(partes[5]).strip().upper()
+                            # =====================================================
+                            # CAMPOS REALES SIRE
+                            # =====================================================
+
+                            serie = (
+                                str(partes[5])
+                                .strip()
+                                .upper()
+                            )
 
                             numero = (
                                 str(partes[7])
                                 .replace(".0", "")
+                                .replace("-", "")
                                 .strip()
+                                .lstrip("0")
                             )
 
-                            ruc = str(partes[10]).strip()
+                            ruc = (
+                                str(partes[13])
+                                .strip()
+                                .lstrip("0")
+                            )
+
+                            # =====================================================
+                            # VALIDAR
+                            # =====================================================
+
+                            if (
+                                ruc == ""
+                                or serie == ""
+                                or numero == ""
+                            ):
+                                continue
+
+                            # =====================================================
+                            # CREAR KEY
+                            # =====================================================
 
                             key = (
 
@@ -272,7 +305,15 @@ if excel_file and (zip_file or txt_files):
                         except:
                             pass
 
+                    # =====================================================
+                    # MES
+                    # =====================================================
+
                     mes = obtener_mes(nombre_archivo)
+
+                    # =====================================================
+                    # GUARDAR MATCH
+                    # =====================================================
 
                     for key in registros:
 
@@ -333,7 +374,7 @@ if excel_file and (zip_file or txt_files):
                             )
 
             # =====================================================
-            # CARPETA TXT
+            # TXT
             # =====================================================
 
             if txt_files:
