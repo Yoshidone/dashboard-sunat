@@ -15,7 +15,9 @@ st.set_page_config(
 )
 
 st.title("📂 CRUCE SUNAT vs SIRE")
-st.markdown("Cruce automático entre SUNAT y SIRE")
+st.markdown(
+    "Cruza el Excel SUNAT con los TXT SIRE y agrega el MES donde fue encontrado."
+)
 
 # =====================================================
 # SUBIR ARCHIVOS
@@ -32,7 +34,7 @@ excel_file = st.file_uploader(
 )
 
 # =====================================================
-# FUNCION OBTENER MES
+# FUNCION MES
 # =====================================================
 
 def obtener_mes(nombre_archivo):
@@ -102,39 +104,85 @@ if zip_file and excel_file:
             ]
 
             # =====================================================
-            # LIMPIAR EXCEL
+            # DETECTAR COLUMNAS SUNAT
             # =====================================================
 
-            df_excel["Número de documento Emisor"] = (
-                df_excel["Número de documento Emisor"]
+            col_ruc = None
+            col_serie = None
+            col_comprobante = None
+
+            for col in df_excel.columns:
+
+                nombre = str(col).lower()
+
+                if "documento" in nombre and "emisor" in nombre:
+                    col_ruc = col
+
+                elif "serie" in nombre:
+                    col_serie = col
+
+                elif (
+                    "comprobante" in nombre
+                    and "tipo" not in nombre
+                ):
+                    col_comprobante = col
+
+            # =====================================================
+            # VALIDAR COLUMNAS
+            # =====================================================
+
+            if col_ruc is None:
+                st.error(
+                    "No se encontró columna Número de documento Emisor"
+                )
+                st.stop()
+
+            if col_serie is None:
+                st.error(
+                    "No se encontró columna Número de Serie"
+                )
+                st.stop()
+
+            if col_comprobante is None:
+                st.error(
+                    "No se encontró columna Número de Comprobante"
+                )
+                st.stop()
+
+            # =====================================================
+            # LIMPIAR COLUMNAS SUNAT
+            # =====================================================
+
+            df_excel[col_ruc] = (
+                df_excel[col_ruc]
                 .astype(str)
                 .str.strip()
             )
 
-            df_excel["Número de Serie"] = (
-                df_excel["Número de Serie"]
+            df_excel[col_serie] = (
+                df_excel[col_serie]
                 .astype(str)
                 .str.strip()
             )
 
-            df_excel["Número de Comprobante"] = (
-                df_excel["Número de Comprobante"]
+            df_excel[col_comprobante] = (
+                df_excel[col_comprobante]
                 .astype(str)
                 .str.replace(r"\.0$", "", regex=True)
                 .str.strip()
             )
 
             # =====================================================
-            # CREAR KEY EXCEL
+            # CREAR KEY SUNAT
             # =====================================================
 
             df_excel["KEY"] = (
 
-                df_excel["Número de documento Emisor"] + "_" +
+                df_excel[col_ruc] + "_" +
 
-                df_excel["Número de Serie"] + "_" +
+                df_excel[col_serie] + "_" +
 
-                df_excel["Número de Comprobante"]
+                df_excel[col_comprobante]
 
             )
 
@@ -160,7 +208,7 @@ if zip_file and excel_file:
                 zip_ref.extractall(temp_dir)
 
             # =====================================================
-            # MAPA MATCH
+            # DICCIONARIO MATCH
             # =====================================================
 
             mapa_match = {}
@@ -183,7 +231,7 @@ if zip_file and excel_file:
                         try:
 
                             # =====================================================
-                            # LEER TXT SIN CABECERA
+                            # LEER TXT
                             # =====================================================
 
                             df_txt = pd.read_csv(
@@ -195,7 +243,7 @@ if zip_file and excel_file:
                             )
 
                             # =====================================================
-                            # ASIGNAR COLUMNAS
+                            # ASIGNAR COLUMNAS SIRE
                             # =====================================================
 
                             columnas = [
@@ -237,7 +285,7 @@ if zip_file and excel_file:
                             df_txt.columns = columnas[:len(df_txt.columns)]
 
                             # =====================================================
-                            # LIMPIAR TXT
+                            # LIMPIAR COLUMNAS SIRE
                             # =====================================================
 
                             df_txt["Nro Doc Identidad"] = (
@@ -304,6 +352,10 @@ if zip_file and excel_file:
                 .map(mapa_match)
             )
 
+            # =====================================================
+            # RELLENAR VACIOS
+            # =====================================================
+
             df_excel["MES_ENCONTRADO"] = (
                 df_excel["MES_ENCONTRADO"]
                 .fillna("NO ENCONTRADO")
@@ -318,10 +370,12 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # METRICAS
+            # RESULTADOS
             # =====================================================
 
-            st.success("✅ Cruce completado correctamente")
+            st.success(
+                "✅ Cruce completado correctamente"
+            )
 
             col1, col2 = st.columns(2)
 
@@ -358,7 +412,7 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # EXPORTAR EXCEL
+            # EXPORTAR EXCEL FINAL
             # =====================================================
 
             output = BytesIO()
