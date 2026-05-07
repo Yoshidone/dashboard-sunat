@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import zipfile
 import io
+import os
 
 # =========================================================
 # CONFIG
@@ -55,9 +56,9 @@ h1 {
 st.title("📁 CRUCE SUNAT vs SIRE")
 
 st.write("""
-1️⃣ Primero sube los TXT SIRE  
-2️⃣ El sistema leerá automáticamente los CAR SUNAT  
-3️⃣ Luego sube el Excel SUNAT  
+1️⃣ Sube TXT, ZIP o carpeta completa  
+2️⃣ El sistema leerá TODOS los CAR SUNAT  
+3️⃣ Luego sube Excel SUNAT  
 4️⃣ Se hará el match automáticamente
 """)
 
@@ -68,38 +69,46 @@ def leer_txt_sire(contenido, nombre_txt):
 
     registros = []
 
-    lineas = contenido.splitlines()
+    try:
 
-    for linea in lineas:
+        lineas = contenido.splitlines()
 
-        try:
+        for linea in lineas:
 
-            partes = linea.split("|")
+            try:
 
-            for valor in partes:
+                partes = linea.split("|")
 
-                valor = str(valor).strip()
+                for valor in partes:
 
-                # VALIDAR POSIBLE CAR
-                if (
-                    len(valor) >= 25
-                    and valor[:11].isdigit()
-                    and any(letra in valor for letra in ["F", "B", "E"])
-                ):
+                    valor = str(valor).strip()
 
-                    registros.append({
-                        "CAR_TXT": valor,
-                        "ARCHIVO_TXT": nombre_txt
-                    })
+                    # VALIDAR CAR
+                    if (
+                        len(valor) >= 25
+                        and valor[:11].isdigit()
+                        and any(
+                            letra in valor
+                            for letra in ["F", "B", "E"]
+                        )
+                    ):
 
-        except:
-            pass
+                        registros.append({
+                            "CAR_TXT": valor,
+                            "ARCHIVO_TXT": nombre_txt
+                        })
+
+            except:
+                pass
+
+    except:
+        pass
 
     return registros
 
 
 # =========================================================
-# FUNCION CREAR CAR DESDE EXCEL SUNAT
+# FUNCION CREAR CAR
 # =========================================================
 def crear_car(row):
 
@@ -112,7 +121,7 @@ def crear_car(row):
 
         ruc = ruc.replace(".0", "")
 
-        # TIPO COMPROBANTE
+        # TIPO
         tipo = str(
             row["Tipo de Comprobante"]
         ).strip()
@@ -133,10 +142,9 @@ def crear_car(row):
 
         comprobante = comprobante.replace(".0", "")
 
-        # COMPLETAR CEROS
         comprobante = comprobante.zfill(10)
 
-        # CAR FINAL
+        # CAR
         car = f"{ruc}{tipo}{serie}{comprobante}"
 
         return str(car).strip()
@@ -146,63 +154,25 @@ def crear_car(row):
 
 
 # =========================================================
-# PASO 1 - SUBIR TXT
+# PASO 1
 # =========================================================
 st.subheader("📂 PASO 1: Subir TXT SIRE")
 
 tipo_carga = st.radio(
-    "",
-    ["ZIP", "TXT"]
+    "Tipo de carga",
+    [
+        "TXT",
+        "ZIP",
+        "CARPETA COMPLETA"
+    ]
 )
 
 txt_files = []
 
 # =========================================================
-# ZIP
+# TXT
 # =========================================================
-if tipo_carga == "ZIP":
-
-    archivo_zip = st.file_uploader(
-        "📦 Subir ZIP",
-        type=["zip"]
-    )
-
-    if archivo_zip:
-
-        zip_bytes = io.BytesIO(
-            archivo_zip.read()
-        )
-
-        with zipfile.ZipFile(
-            zip_bytes,
-            "r"
-        ) as z:
-
-            for nombre in z.namelist():
-
-                if nombre.lower().endswith(".txt"):
-
-                    try:
-
-                        contenido = z.read(
-                            nombre
-                        ).decode(
-                            "latin-1",
-                            errors="ignore"
-                        )
-
-                        txt_files.append({
-                            "nombre": nombre,
-                            "contenido": contenido
-                        })
-
-                    except:
-                        pass
-
-# =========================================================
-# TXT INDIVIDUALES
-# =========================================================
-else:
+if tipo_carga == "TXT":
 
     archivos_txt = st.file_uploader(
         "📁 Subir TXT",
@@ -230,7 +200,85 @@ else:
                 pass
 
 # =========================================================
-# LEER TXT
+# ZIP
+# =========================================================
+elif tipo_carga == "ZIP":
+
+    archivo_zip = st.file_uploader(
+        "📦 Subir ZIP",
+        type=["zip"]
+    )
+
+    if archivo_zip:
+
+        try:
+
+            zip_bytes = io.BytesIO(
+                archivo_zip.read()
+            )
+
+            with zipfile.ZipFile(
+                zip_bytes,
+                "r"
+            ) as z:
+
+                for nombre in z.namelist():
+
+                    if nombre.lower().endswith(".txt"):
+
+                        try:
+
+                            contenido = z.read(
+                                nombre
+                            ).decode(
+                                "latin-1",
+                                errors="ignore"
+                            )
+
+                            txt_files.append({
+                                "nombre": os.path.basename(nombre),
+                                "contenido": contenido
+                            })
+
+                        except:
+                            pass
+
+        except Exception as e:
+
+            st.error(f"Error ZIP: {e}")
+
+# =========================================================
+# CARPETA COMPLETA
+# =========================================================
+elif tipo_carga == "CARPETA COMPLETA":
+
+    carpeta_txt = st.file_uploader(
+        "📂 Subir carpeta completa",
+        type=["txt"],
+        accept_multiple_files=True
+    )
+
+    if carpeta_txt:
+
+        for archivo in carpeta_txt:
+
+            try:
+
+                contenido = archivo.read().decode(
+                    "latin-1",
+                    errors="ignore"
+                )
+
+                txt_files.append({
+                    "nombre": archivo.name,
+                    "contenido": contenido
+                })
+
+            except:
+                pass
+
+# =========================================================
+# LEER TODOS LOS TXT
 # =========================================================
 df_txt = pd.DataFrame()
 
@@ -238,7 +286,11 @@ if len(txt_files) > 0:
 
     lista_txt = []
 
-    for txt in txt_files:
+    progreso = st.progress(0)
+
+    total = len(txt_files)
+
+    for i, txt in enumerate(txt_files):
 
         nombre_txt = txt["nombre"]
 
@@ -250,6 +302,8 @@ if len(txt_files) > 0:
         )
 
         lista_txt.extend(registros)
+
+        progreso.progress((i + 1) / total)
 
     df_txt = pd.DataFrame(lista_txt)
 
@@ -265,35 +319,41 @@ if len(txt_files) > 0:
         # ELIMINAR DUPLICADOS
         df_txt = df_txt.drop_duplicates()
 
-        # RESETEAR INDEX
+        # RESET
         df_txt = df_txt.reset_index(drop=True)
 
         st.markdown("""
         <div class='success-box'>
-        ✅ TXT leídos correctamente
+        ✅ TODOS los TXT fueron leídos correctamente
         </div>
         """, unsafe_allow_html=True)
+
+        st.write(f"""
+        📄 TXT procesados: {len(txt_files)}
+        """)
+
+        st.write(f"""
+        🔎 Total CAR encontrados: {len(df_txt)}
+        """)
 
         st.subheader("📊 CAR encontrados en TXT")
 
         st.dataframe(
             df_txt,
             use_container_width=True,
-            height=400
+            height=450
         )
-
-        st.write(f"Total CAR encontrados: {len(df_txt)}")
 
     else:
 
         st.markdown("""
         <div class='warning-box'>
-        ⚠️ No se encontraron CAR válidos en los TXT
+        ⚠️ No se encontraron CAR válidos
         </div>
         """, unsafe_allow_html=True)
 
 # =========================================================
-# PASO 2 - SUBIR EXCEL SUNAT
+# PASO 2
 # =========================================================
 if not df_txt.empty:
 
@@ -310,16 +370,12 @@ if not df_txt.empty:
 
         try:
 
-            # =================================================
             # LEER EXCEL
-            # =================================================
             df_sunat = pd.read_excel(
                 archivo_sunat
             )
 
-            # =================================================
             # LIMPIAR COLUMNAS
-            # =================================================
             df_sunat.columns = (
                 df_sunat.columns
                 .str.strip()
@@ -329,9 +385,7 @@ if not df_txt.empty:
                 "✅ Excel SUNAT cargado"
             )
 
-            # =================================================
-            # VALIDAR COLUMNAS
-            # =================================================
+            # VALIDAR
             columnas_necesarias = [
                 "Número de documento Emisor",
                 "Tipo de Comprobante",
@@ -353,9 +407,7 @@ if not df_txt.empty:
 
             else:
 
-                # =============================================
                 # CREAR CAR
-                # =============================================
                 df_sunat["CAR_GENERADO"] = (
                     df_sunat.apply(
                         crear_car,
@@ -370,9 +422,7 @@ if not df_txt.empty:
                     .str.strip()
                 )
 
-                # =============================================
                 # MATCH
-                # =============================================
                 df_resultado = pd.merge(
                     df_sunat,
                     df_txt,
@@ -381,12 +431,11 @@ if not df_txt.empty:
                     how="left"
                 )
 
-                # =============================================
                 # ESTADO
-                # =============================================
                 df_resultado["MATCH"] = (
-                    df_resultado["ARCHIVO_TXT"]
-                    .apply(
+                    df_resultado[
+                        "ARCHIVO_TXT"
+                    ].apply(
                         lambda x:
                         "ENCONTRADO"
                         if pd.notnull(x)
@@ -394,9 +443,7 @@ if not df_txt.empty:
                     )
                 )
 
-                # =============================================
                 # CONTADORES
-                # =============================================
                 encontrados = (
                     df_resultado["MATCH"]
                     == "ENCONTRADO"
@@ -407,24 +454,22 @@ if not df_txt.empty:
                     == "NO ENCONTRADO"
                 ).sum()
 
-                # =============================================
                 # MENSAJES
-                # =============================================
                 st.markdown(f"""
                 <div class='success-box'>
-                ✅ Coincidencias encontradas: {encontrados}
+                ✅ Coincidencias encontradas:
+                {encontrados}
                 </div>
                 """, unsafe_allow_html=True)
 
                 st.markdown(f"""
                 <div class='warning-box'>
-                ⚠️ No encontrados: {no_encontrados}
+                ⚠️ No encontrados:
+                {no_encontrados}
                 </div>
                 """, unsafe_allow_html=True)
 
-                # =============================================
                 # RESULTADO
-                # =============================================
                 st.subheader("📊 Resultado Cruce")
 
                 st.dataframe(
@@ -433,9 +478,7 @@ if not df_txt.empty:
                     height=650
                 )
 
-                # =============================================
-                # DESCARGAR EXCEL
-                # =============================================
+                # DESCARGA
                 excel_buffer = io.BytesIO()
 
                 with pd.ExcelWriter(
