@@ -4,63 +4,65 @@ import zipfile
 import io
 from io import BytesIO
 
-st.set_page_config(page_title="CRUCE SUNAT vs SIRE", layout="wide")
+# =========================================================
+# CONFIG
+# =========================================================
+
+st.set_page_config(
+    page_title="CRUCE SUNAT vs SIRE",
+    layout="wide"
+)
+
 st.title("📁 CRUCE SUNAT vs SIRE")
-st.write("Cruza automáticamente los TXT SIRE con el Excel SUNAT y devuelve el MES donde fue encontrado.")
+
+st.write(
+    "Cruza automáticamente los TXT SIRE con el Excel SUNAT y devuelve el MES donde fue encontrado."
+)
 
 # =========================================================
-# FUNCIÓN LIMPIAR
+# LIMPIAR
 # =========================================================
 
 def limpiar(valor):
+
     if pd.isna(valor):
         return ""
+
     valor = str(valor).strip()
+
     if valor.endswith(".0"):
         valor = valor[:-2]
+
     return valor.strip()
 
+
 # =========================================================
-# FUNCIÓN LEER TXT SIRE (ROBUSTA)
+# LEER TXT SIRE
 # =========================================================
 
 def leer_txt_sire(contenido_bytes):
-    """
-    Lee un TXT del SIRE con separador |
-    Busca la línea de encabezado real que contenga columnas conocidas.
-    Retorna un DataFrame limpio o None si falla.
-    """
-    texto = contenido_bytes.decode("utf-8", errors="ignore")
-    lineas = texto.splitlines()
 
-    header_idx = None
-    for i, linea in enumerate(lineas):
-        # Buscar la línea que tiene los encabezados reales del SIRE
-        if "Nro Doc Identidad" in linea or "Serie del CDP" in linea:
-            header_idx = i
-            break
-
-    if header_idx is None:
-        # Fallback: intentar leer desde el inicio y buscar columnas numéricamente
-        return None, "No se encontró línea de encabezado con 'Nro Doc Identidad'"
-
-    # Reconstruir el texto desde la línea del encabezado
-    texto_limpio = "\n".join(lineas[header_idx:])
+    texto = contenido_bytes.decode(
+        "utf-8",
+        errors="ignore"
+    )
 
     df = pd.read_csv(
-        io.StringIO(texto_limpio),
+        io.StringIO(texto),
         sep="|",
+        header=None,
         dtype=str,
         engine="python"
     )
 
-    # Limpiar nombres de columnas
-    df.columns = [str(c).strip() for c in df.columns]
+    # eliminar columnas vacías
+    df = df.dropna(axis=1, how="all")
 
-    # Eliminar columnas Unnamed
-    df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
+    # columnas numéricas
+    df.columns = range(df.shape[1])
 
     return df, None
+
 
 # =========================================================
 # MESES
@@ -81,179 +83,291 @@ MESES = {
     "202512": "DICIEMBRE",
 }
 
-def extraer_mes(nombre_txt):
-    """
-    Extrae el mes del nombre del archivo TXT.
-    Ejemplo: LE2060239379920250100080400021112.txt → posición 13:19 → 202501 → ENERO
-    También busca el patrón 2025XX en cualquier parte del nombre como fallback.
-    """
-    # Intento 1: posición fija 13:19
-    if len(nombre_txt) >= 19:
-        codigo = nombre_txt[13:19]
-        if codigo in MESES:
-            return MESES[codigo]
 
-    # Intento 2: buscar cualquier coincidencia 2025XX en el nombre
+def extraer_mes(nombre_txt):
+
     for codigo, mes in MESES.items():
+
         if codigo in nombre_txt:
             return mes
 
     return "SIN MES"
 
+
 # =========================================================
 # CARGA SIRE
 # =========================================================
 
-tipo_carga = st.radio("Selecciona tipo de carga SIRE", ["ZIP", "TXT"])
+tipo_carga = st.radio(
+    "Selecciona carga SIRE",
+    ["ZIP", "TXT"]
+)
 
 archivos_txt = []
 
+# =========================================================
+# ZIP
+# =========================================================
+
 if tipo_carga == "ZIP":
-    zip_file = st.file_uploader("📦 Subir ZIP SIRE", type=["zip"])
+
+    zip_file = st.file_uploader(
+        "📦 Subir ZIP SIRE",
+        type=["zip"]
+    )
+
     if zip_file:
+
         with zipfile.ZipFile(zip_file, "r") as z:
+
             for nombre in z.namelist():
+
                 if nombre.lower().endswith(".txt"):
-                    archivos_txt.append((nombre, z.read(nombre)))
+
+                    archivos_txt.append(
+                        (
+                            nombre,
+                            z.read(nombre)
+                        )
+                    )
+
+# =========================================================
+# TXT
+# =========================================================
+
 else:
+
     txt_files = st.file_uploader(
         "📂 Subir TXT SIRE",
         type=["txt"],
         accept_multiple_files=True
     )
+
     if txt_files:
+
         for archivo in txt_files:
-            archivos_txt.append((archivo.name, archivo.getvalue()))
+
+            archivos_txt.append(
+                (
+                    archivo.name,
+                    archivo.getvalue()
+                )
+            )
 
 # =========================================================
-# CARGA SUNAT
+# SUBIR SUNAT
 # =========================================================
 
-excel_sunat = st.file_uploader("📊 Subir Excel SUNAT", type=["xlsx"])
+excel_sunat = st.file_uploader(
+    "📊 Subir Excel SUNAT",
+    type=["xlsx"]
+)
 
 # =========================================================
-# PROCESO PRINCIPAL
+# PROCESO
 # =========================================================
 
 if archivos_txt and excel_sunat:
+
     try:
 
-        # -------------------------------------------------
+        # =====================================================
         # LEER SUNAT
-        # -------------------------------------------------
+        # =====================================================
 
-        df_sunat = pd.read_excel(excel_sunat, dtype=str)
-        df_sunat.columns = [str(c).strip() for c in df_sunat.columns]
-
-        col_ruc_sunat   = "Número de documento Emisor"
-        col_serie_sunat = "Número de Serie"
-        col_num_sunat   = "Número de Comprobante"
-
-        # Verificar columnas requeridas
-        faltantes = [c for c in [col_ruc_sunat, col_serie_sunat, col_num_sunat] if c not in df_sunat.columns]
-        if faltantes:
-            st.error(f"❌ El Excel SUNAT no tiene estas columnas: {faltantes}")
-            st.stop()
-
-        df_sunat["_KEY"] = (
-            df_sunat[col_ruc_sunat].apply(limpiar)
-            + "_"
-            + df_sunat[col_serie_sunat].apply(limpiar)
-            + "_"
-            + df_sunat[col_num_sunat].apply(limpiar)
+        df_sunat = pd.read_excel(
+            excel_sunat,
+            dtype=str
         )
 
-        # -------------------------------------------------
-        # LEER TODOS LOS TXT SIRE
-        # -------------------------------------------------
+        df_sunat.columns = [
+            str(c).strip()
+            for c in df_sunat.columns
+        ]
 
-        col_ruc_sire   = "Nro Doc Identidad"
-        col_serie_sire = "Serie del CDP"
-        col_num_sire   = "Nro CP o Doc. Nro Inicial (Rango)"
+        # =====================================================
+        # COLUMNAS SUNAT
+        # =====================================================
+
+        col_ruc_sunat = "Número de documento Emisor"
+
+        col_serie_sunat = "Número de Serie"
+
+        col_comp_sunat = "Número de Comprobante"
+
+        # =====================================================
+        # KEY SUNAT
+        # =====================================================
+
+        df_sunat["_KEY"] = (
+
+            df_sunat[col_ruc_sunat].apply(limpiar)
+
+            + "_"
+
+            + df_sunat[col_serie_sunat].apply(limpiar)
+
+            + "_"
+
+            + df_sunat[col_comp_sunat].apply(limpiar)
+
+        )
+
+        # =====================================================
+        # POSICIONES TXT SIRE
+        # =====================================================
+
+        # M = Nro Doc Identidad
+        IDX_RUC = 12
+
+        # H = Serie del CDP
+        IDX_SERIE = 7
+
+        # J = Nro CP
+        IDX_COMP = 9
+
+        # =====================================================
+        # DICCIONARIO MESES
+        # =====================================================
 
         diccionario_mes = {}
+
         errores = []
+
+        # =====================================================
+        # RECORRER TXT
+        # =====================================================
 
         for nombre_txt, contenido_txt in archivos_txt:
 
-            mes = extraer_mes(nombre_txt)
+            try:
 
-            df_txt, error = leer_txt_sire(contenido_txt)
+                mes = extraer_mes(nombre_txt)
 
-            if error:
-                errores.append(f"{nombre_txt}: {error}")
-                continue
+                df_txt, error = leer_txt_sire(contenido_txt)
 
-            # Verificar columnas necesarias
-            cols_faltantes = [c for c in [col_ruc_sire, col_serie_sire, col_num_sire] if c not in df_txt.columns]
-            if cols_faltantes:
-                # Intentar búsqueda parcial de columnas (por si hay espacios extra)
-                mapa = {}
-                for needed in [col_ruc_sire, col_serie_sire, col_num_sire]:
-                    for col in df_txt.columns:
-                        if needed.lower().strip() in col.lower().strip():
-                            mapa[needed] = col
-                            break
+                if error:
 
-                if len(mapa) == 3:
-                    df_txt = df_txt.rename(columns={v: k for k, v in mapa.items()})
-                else:
-                    errores.append(f"{nombre_txt}: columnas no encontradas → {cols_faltantes} | Columnas disponibles: {list(df_txt.columns)}")
+                    errores.append(
+                        f"{nombre_txt}: {error}"
+                    )
+
                     continue
 
-            # Construir KEY SIRE
-            df_txt["_KEY"] = (
-                df_txt[col_ruc_sire].apply(limpiar)
-                + "_"
-                + df_txt[col_serie_sire].apply(limpiar)
-                + "_"
-                + df_txt[col_num_sire].apply(limpiar)
-            )
+                # =============================================
+                # CREAR KEY SIRE
+                # =============================================
 
-            # Registrar en diccionario (primera aparición gana)
-            for key in df_txt["_KEY"]:
-                if key and key not in diccionario_mes:
-                    diccionario_mes[key] = mes
+                df_txt["_KEY"] = (
 
-        # Mostrar errores si los hay
+                    df_txt[IDX_RUC].apply(limpiar)
+
+                    + "_"
+
+                    + df_txt[IDX_SERIE].apply(limpiar)
+
+                    + "_"
+
+                    + df_txt[IDX_COMP].apply(limpiar)
+
+                )
+
+                # =============================================
+                # GUARDAR MES
+                # =============================================
+
+                for key in df_txt["_KEY"]:
+
+                    if (
+                        key
+                        and key not in diccionario_mes
+                    ):
+
+                        diccionario_mes[key] = mes
+
+            except Exception as e:
+
+                errores.append(
+                    f"{nombre_txt}: {e}"
+                )
+
+        # =====================================================
+        # MOSTRAR ERRORES
+        # =====================================================
+
         for err in errores:
-            st.warning(f"⚠️ {err}")
 
-        # -------------------------------------------------
+            st.warning(err)
+
+        # =====================================================
         # CRUCE
-        # -------------------------------------------------
+        # =====================================================
 
         df_sunat["MES_ENCONTRADO"] = (
+
             df_sunat["_KEY"]
             .map(diccionario_mes)
             .fillna("NO ENCONTRADO")
+
         )
 
-        # -------------------------------------------------
+        # =====================================================
+        # CONTAR COINCIDENCIAS
+        # =====================================================
+
+        coincidencias = (
+            df_sunat["MES_ENCONTRADO"]
+            != "NO ENCONTRADO"
+        ).sum()
+
+        # =====================================================
         # RESULTADO
-        # -------------------------------------------------
+        # =====================================================
 
-        coincidencias = (df_sunat["MES_ENCONTRADO"] != "NO ENCONTRADO").sum()
+        st.success(
+            "✅ Cruce completado correctamente"
+        )
 
-        st.success("✅ Cruce completado correctamente")
+        col1, col2 = st.columns(2)
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total registros SUNAT", len(df_sunat))
-        col2.metric("Coincidencias encontradas", coincidencias)
-        col3.metric("No encontrados", len(df_sunat) - coincidencias)
+        col1.metric(
+            "Total registros",
+            len(df_sunat)
+        )
 
-        # Tabla final sin columna interna _KEY
-        df_final = df_sunat.drop(columns=["_KEY"])
+        col2.metric(
+            "Coincidencias",
+            coincidencias
+        )
 
-        st.dataframe(df_final, use_container_width=True)
+        # =====================================================
+        # TABLA FINAL
+        # =====================================================
 
-        # -------------------------------------------------
+        df_final = df_sunat.drop(
+            columns=["_KEY"]
+        )
+
+        st.dataframe(
+            df_final,
+            use_container_width=True
+        )
+
+        # =====================================================
         # EXPORTAR
-        # -------------------------------------------------
+        # =====================================================
 
         output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            df_final.to_excel(writer, index=False)
+
+        with pd.ExcelWriter(
+            output,
+            engine="openpyxl"
+        ) as writer:
+
+            df_final.to_excel(
+                writer,
+                index=False
+            )
 
         st.download_button(
             "📥 Descargar Excel Final",
@@ -263,5 +377,7 @@ if archivos_txt and excel_sunat:
         )
 
     except Exception as e:
-        st.error(f"❌ Error general: {e}")
-        st.exception(e)
+
+        st.error(
+            f"❌ Error general: {e}"
+        )
