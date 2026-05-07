@@ -56,13 +56,13 @@ st.title("📁 CRUCE SUNAT vs SIRE")
 
 st.write("""
 1️⃣ Primero sube los TXT SIRE  
-2️⃣ El sistema leerá el CAR SUNAT  
+2️⃣ El sistema leerá la columna CAR SUNAT  
 3️⃣ Luego sube el Excel SUNAT  
 4️⃣ Se hará el match automáticamente
 """)
 
 # =========================================================
-# FUNCION LEER TXT
+# FUNCION LEER TXT SIRE
 # =========================================================
 def leer_txt_sire(contenido, nombre_txt):
 
@@ -80,10 +80,11 @@ def leer_txt_sire(contenido, nombre_txt):
             if len(partes) < 5:
                 continue
 
-            # CAR SUNAT
+            # COLUMNA CAR SUNAT
             car = partes[3].strip()
 
-            if car != "":
+            # EVITAR ENCABEZADO
+            if car != "" and car.upper() != "CAR SUNAT":
 
                 registros.append({
                     "CAR_TXT": car,
@@ -97,23 +98,42 @@ def leer_txt_sire(contenido, nombre_txt):
 
 
 # =========================================================
-# FUNCION CREAR CAR SUNAT
+# FUNCION CREAR CAR DESDE SUNAT
 # =========================================================
 def crear_car(row):
 
     try:
 
-        ruc = str(row["Número de documento Emisor"]).strip()
+        # RUC
+        ruc = str(
+            row["Número de documento Emisor"]
+        ).strip()
 
-        serie = str(row["Número de Serie"]).strip().upper()
+        # TIPO COMPROBANTE
+        tipo = str(
+            row["Tipo de Comprobante"]
+        ).strip()
 
-        comprobante = str(row["Número de Comprobante"]).strip()
+        tipo = tipo.replace(".0", "")
+
+        tipo = tipo.zfill(2)
+
+        # SERIE
+        serie = str(
+            row["Número de Serie"]
+        ).strip().upper()
+
+        # COMPROBANTE
+        comprobante = str(
+            row["Número de Comprobante"]
+        ).strip()
 
         comprobante = comprobante.replace(".0", "")
 
         comprobante = comprobante.zfill(8)
 
-        car = f"{ruc}{serie}{comprobante}"
+        # CAR FINAL
+        car = f"{ruc}{tipo}{serie}{comprobante}"
 
         return car
 
@@ -122,7 +142,7 @@ def crear_car(row):
 
 
 # =========================================================
-# SUBIR TXT PRIMERO
+# SUBIR TXT
 # =========================================================
 st.subheader("📂 PASO 1: Subir TXT SIRE")
 
@@ -145,9 +165,14 @@ if tipo_carga == "ZIP":
 
     if archivo_zip:
 
-        zip_bytes = io.BytesIO(archivo_zip.read())
+        zip_bytes = io.BytesIO(
+            archivo_zip.read()
+        )
 
-        with zipfile.ZipFile(zip_bytes, "r") as z:
+        with zipfile.ZipFile(
+            zip_bytes,
+            "r"
+        ) as z:
 
             for nombre in z.namelist():
 
@@ -155,7 +180,9 @@ if tipo_carga == "ZIP":
 
                     try:
 
-                        contenido = z.read(nombre).decode(
+                        contenido = z.read(
+                            nombre
+                        ).decode(
                             "latin-1",
                             errors="ignore"
                         )
@@ -199,7 +226,7 @@ else:
                 pass
 
 # =========================================================
-# LEER TXT Y CREAR DF
+# LEER TXT
 # =========================================================
 df_txt = pd.DataFrame()
 
@@ -222,7 +249,19 @@ if len(txt_files) > 0:
 
     df_txt = pd.DataFrame(lista_txt)
 
+    # =====================================================
+    # LIMPIAR
+    # =====================================================
     if not df_txt.empty:
+
+        df_txt["CAR_TXT"] = (
+            df_txt["CAR_TXT"]
+            .astype(str)
+            .str.strip()
+        )
+
+        # ELIMINAR DUPLICADOS
+        df_txt = df_txt.drop_duplicates()
 
         st.markdown("""
         <div class='success-box'>
@@ -239,7 +278,7 @@ if len(txt_files) > 0:
         )
 
 # =========================================================
-# SUBIR SUNAT DESPUES
+# SUBIR EXCEL SUNAT
 # =========================================================
 if not df_txt.empty:
 
@@ -256,19 +295,29 @@ if not df_txt.empty:
 
         try:
 
-            df_sunat = pd.read_excel(archivo_sunat)
-
-            df_sunat.columns = (
-                df_sunat.columns.str.strip()
+            # =================================================
+            # LEER EXCEL
+            # =================================================
+            df_sunat = pd.read_excel(
+                archivo_sunat
             )
 
-            st.success("✅ Excel SUNAT cargado")
+            # LIMPIAR COLUMNAS
+            df_sunat.columns = (
+                df_sunat.columns
+                .str.strip()
+            )
+
+            st.success(
+                "✅ Excel SUNAT cargado"
+            )
 
             # =================================================
             # VALIDAR COLUMNAS
             # =================================================
             columnas_necesarias = [
                 "Número de documento Emisor",
+                "Tipo de Comprobante",
                 "Número de Serie",
                 "Número de Comprobante"
             ]
@@ -290,9 +339,18 @@ if not df_txt.empty:
                 # =============================================
                 # CREAR CAR_GENERADO
                 # =============================================
-                df_sunat["CAR_GENERADO"] = df_sunat.apply(
-                    crear_car,
-                    axis=1
+                df_sunat["CAR_GENERADO"] = (
+                    df_sunat.apply(
+                        crear_car,
+                        axis=1
+                    )
+                )
+
+                # LIMPIAR
+                df_sunat["CAR_GENERADO"] = (
+                    df_sunat["CAR_GENERADO"]
+                    .astype(str)
+                    .str.strip()
                 )
 
                 # =============================================
@@ -307,15 +365,17 @@ if not df_txt.empty:
                 )
 
                 # =============================================
-                # ESTADO
+                # ESTADO MATCH
                 # =============================================
-                df_resultado["MATCH"] = df_resultado[
-                    "ARCHIVO_TXT"
-                ].apply(
-                    lambda x:
-                    "ENCONTRADO"
-                    if pd.notnull(x)
-                    else "NO ENCONTRADO"
+                df_resultado["MATCH"] = (
+                    df_resultado[
+                        "ARCHIVO_TXT"
+                    ].apply(
+                        lambda x:
+                        "ENCONTRADO"
+                        if pd.notnull(x)
+                        else "NO ENCONTRADO"
+                    )
                 )
 
                 # =============================================
@@ -326,17 +386,32 @@ if not df_txt.empty:
                     == "ENCONTRADO"
                 ).sum()
 
+                no_encontrados = (
+                    df_resultado["MATCH"]
+                    == "NO ENCONTRADO"
+                ).sum()
+
+                # =============================================
+                # MENSAJES
+                # =============================================
                 st.markdown(f"""
                 <div class='success-box'>
-                ✅ Coincidencias encontradas:
-                {encontrados}
+                ✅ Coincidencias encontradas: {encontrados}
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown(f"""
+                <div class='warning-box'>
+                ⚠️ No encontrados: {no_encontrados}
                 </div>
                 """, unsafe_allow_html=True)
 
                 # =============================================
                 # RESULTADO
                 # =============================================
-                st.subheader("📊 Resultado Cruce")
+                st.subheader(
+                    "📊 Resultado Cruce"
+                )
 
                 st.dataframe(
                     df_resultado,
@@ -345,7 +420,7 @@ if not df_txt.empty:
                 )
 
                 # =============================================
-                # DESCARGAR
+                # DESCARGAR EXCEL
                 # =============================================
                 excel_buffer = io.BytesIO()
 
