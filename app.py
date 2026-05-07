@@ -64,7 +64,7 @@ def obtener_mes(nombre_archivo):
 
 
 # =====================================================
-# CARGA
+# CARGA SIRE
 # =====================================================
 
 tipo_carga = st.radio(
@@ -124,25 +124,67 @@ else:
             )
 
 # =====================================================
+# VALIDAR TXT
+# =====================================================
+
+txt_convertidos = False
+
+if len(archivos_txt) > 0:
+
+    try:
+
+        contador_txt = 0
+
+        for nombre_txt, contenido_txt in archivos_txt:
+
+            texto = contenido_txt.decode(
+                "utf-8",
+                errors="ignore"
+            )
+
+            pd.read_csv(
+                io.StringIO(texto),
+                sep="|",
+                dtype=str,
+                engine="python"
+            )
+
+            contador_txt += 1
+
+        if contador_txt > 0:
+
+            txt_convertidos = True
+
+            st.success(
+                f"✅ {contador_txt} TXT convertidos correctamente a Excel.\n\nAhora sube el archivo SUNAT."
+            )
+
+    except Exception as e:
+
+        st.error(
+            f"❌ Error convirtiendo TXT: {e}"
+        )
+
+# =====================================================
 # SUNAT
 # =====================================================
 
-excel_sunat = st.file_uploader(
-    "📊 Subir Excel SUNAT",
-    type=["xlsx"]
-)
+excel_sunat = None
+
+if txt_convertidos:
+
+    excel_sunat = st.file_uploader(
+        "📊 Subir Excel SUNAT",
+        type=["xlsx"]
+    )
 
 # =====================================================
-# PROCESO
+# PROCESAR
 # =====================================================
 
 if archivos_txt and excel_sunat:
 
     try:
-
-        # =================================================
-        # LISTA SIRE
-        # =================================================
 
         lista_sire = []
 
@@ -164,7 +206,7 @@ if archivos_txt and excel_sunat:
                 )
 
                 # =========================================
-                # CONVERTIR TXT A TABLA
+                # TXT -> TABLA
                 # =========================================
 
                 df_txt = pd.read_csv(
@@ -189,7 +231,7 @@ if archivos_txt and excel_sunat:
                 ]
 
                 # =========================================
-                # ELIMINAR UNNAMED
+                # ELIMINAR VACIAS
                 # =========================================
 
                 df_txt = df_txt.loc[
@@ -198,17 +240,18 @@ if archivos_txt and excel_sunat:
                 ]
 
                 # =========================================
-                # LIMPIAR DATA
+                # LIMPIAR CELDAS
                 # =========================================
 
-                df_txt = df_txt.applymap(
+                df_txt = df_txt.astype(str)
 
-                    lambda x:
-                    str(x).strip()
-                    if pd.notnull(x)
-                    else ""
+                for col in df_txt.columns:
 
-                )
+                    df_txt[col] = (
+                        df_txt[col]
+                        .astype(str)
+                        .str.strip()
+                    )
 
                 # =========================================
                 # VALIDAR COLUMNAS
@@ -241,7 +284,7 @@ if archivos_txt and excel_sunat:
                     continue
 
                 # =========================================
-                # LIMPIAR CAMPOS
+                # LIMPIAR
                 # =========================================
 
                 df_txt["Nro Doc Identidad"] = (
@@ -260,7 +303,7 @@ if archivos_txt and excel_sunat:
                 )
 
                 # =========================================
-                # CREAR KEY
+                # KEY
                 # =========================================
 
                 df_txt["KEY"] = (
@@ -365,20 +408,21 @@ if archivos_txt and excel_sunat:
         ]
 
         # =================================================
-        # LIMPIAR DATA
+        # LIMPIAR CELDAS
         # =================================================
 
-        df_sunat = df_sunat.applymap(
+        df_sunat = df_sunat.astype(str)
 
-            lambda x:
-            str(x).strip()
-            if pd.notnull(x)
-            else ""
+        for col in df_sunat.columns:
 
-        )
+            df_sunat[col] = (
+                df_sunat[col]
+                .astype(str)
+                .str.strip()
+            )
 
         # =================================================
-        # VALIDAR COLUMNAS SUNAT
+        # VALIDAR SUNAT
         # =================================================
 
         columnas_sunat = [
@@ -408,7 +452,7 @@ if archivos_txt and excel_sunat:
             st.stop()
 
         # =================================================
-        # LIMPIAR SUNAT
+        # LIMPIAR
         # =================================================
 
         df_sunat["Número de documento Emisor"] = (
@@ -522,7 +566,7 @@ if archivos_txt and excel_sunat:
         )
 
         # =================================================
-        # DESCARGA
+        # DESCARGAR
         # =================================================
 
         output = BytesIO()
