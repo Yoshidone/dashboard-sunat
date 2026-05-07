@@ -17,23 +17,22 @@ st.set_page_config(
 st.title("📂 CRUCE SUNAT vs SIRE")
 
 st.markdown("""
-Cruce automático entre:
+Convierte automáticamente los TXT SIRE a tabla tipo Excel,
+luego cruza:
 
-SIRE
+SIRE:
 - Nro Doc Identidad
 - Serie del CDP
 - Nro CP o Doc. Nro Inicial (Rango)
 
 VS
 
-SUNAT
+SUNAT:
 - Número de documento Emisor
 - Número de Serie
 - Número de Comprobante
 
-El resultado mantiene TODO el formato SUNAT
-y agrega la columna:
-
+y finalmente agrega:
 MES_ENCONTRADO
 """)
 
@@ -78,8 +77,6 @@ excel_file = st.file_uploader(
 
 def obtener_mes(nombre):
 
-    nombre = str(nombre)
-
     meses = {
 
         "202501": "ENERO",
@@ -99,13 +96,14 @@ def obtener_mes(nombre):
 
     for k, v in meses.items():
 
-        if k in nombre:
+        if k in str(nombre):
+
             return v
 
     return "NO ENCONTRADO"
 
 # =========================================================
-# NORMALIZAR
+# LIMPIAR
 # =========================================================
 
 def limpiar(valor):
@@ -117,6 +115,7 @@ def limpiar(valor):
 
     valor = valor.replace(".0", "")
     valor = valor.replace("-", "")
+    valor = valor.replace(" ", "")
     valor = valor.strip()
     valor = valor.upper()
     valor = valor.lstrip("0")
@@ -182,15 +181,15 @@ if excel_file and (zip_file or txt_files):
             # =====================================================
 
             if col_ruc is None:
-                st.error("No se encontró columna RUC")
+                st.error("No se encontró columna Número de documento Emisor")
                 st.stop()
 
             if col_serie is None:
-                st.error("No se encontró columna Serie")
+                st.error("No se encontró columna Número de Serie")
                 st.stop()
 
             if col_comp is None:
-                st.error("No se encontró columna Comprobante")
+                st.error("No se encontró columna Número de Comprobante")
                 st.stop()
 
             # =====================================================
@@ -227,59 +226,117 @@ if excel_file and (zip_file or txt_files):
             )
 
             # =====================================================
-            # DATAFRAME SIRE
+            # LISTA SIRE
             # =====================================================
 
             lista_sire = []
 
             # =====================================================
-            # FUNCION TXT -> EXCEL
+            # FUNCION TXT -> DATAFRAME
             # =====================================================
 
-            def txt_a_dataframe(nombre_archivo, contenido):
+            def procesar_txt(nombre_archivo, contenido):
 
                 try:
 
-                    lineas = contenido.decode(
-                        "utf-8",
-                        errors="ignore"
-                    ).splitlines()
+                    # =================================================
+                    # CONVERTIR TXT A TABLA
+                    # =================================================
 
-                    registros = []
+                    df_txt = pd.read_csv(
+                        BytesIO(contenido),
+                        sep="|",
+                        dtype=str,
+                        encoding="utf-8",
+                        engine="python",
+                        on_bad_lines="skip",
+                        header=None
+                    )
 
-                    for linea in lineas:
+                    # =================================================
+                    # VALIDAR COLUMNAS
+                    # =================================================
 
-                        partes = linea.split("|")
+                    if len(df_txt.columns) < 14:
 
-                        if len(partes) < 15:
-                            continue
+                        st.warning(
+                            f"{nombre_archivo} no tiene suficientes columnas"
+                        )
 
-                        try:
+                        return
 
-                            fila = {
+                    # =================================================
+                    # RENOMBRAR COLUMNAS
+                    # =================================================
 
-                                "RUC": limpiar(partes[13]),
+                    columnas = {
 
-                                "SERIE": limpiar(partes[5]),
+                        5: "Serie del CDP",
+                        9: "Nro CP o Doc. Nro Inicial (Rango)",
+                        12: "Tipo Doc",
+                        13: "Nro Doc Identidad"
 
-                                "COMPROBANTE": limpiar(partes[7]),
+                    }
 
-                                "MES_ENCONTRADO": obtener_mes(
-                                    nombre_archivo
-                                )
+                    df_txt = df_txt.rename(
+                        columns=columnas
+                    )
 
-                            }
+                    # =================================================
+                    # LIMPIAR
+                    # =================================================
 
-                            registros.append(fila)
+                    df_txt["RUC_KEY"] = (
+                        df_txt["Nro Doc Identidad"]
+                        .apply(limpiar)
+                    )
 
-                        except:
-                            pass
+                    df_txt["SERIE_KEY"] = (
+                        df_txt["Serie del CDP"]
+                        .apply(limpiar)
+                    )
 
-                    if len(registros) > 0:
+                    df_txt["COMP_KEY"] = (
+                        df_txt["Nro CP o Doc. Nro Inicial (Rango)"]
+                        .apply(limpiar)
+                    )
 
-                        df = pd.DataFrame(registros)
+                    # =================================================
+                    # KEY
+                    # =================================================
 
-                        lista_sire.append(df)
+                    df_txt["KEY"] = (
+
+                        df_txt["RUC_KEY"] + "_" +
+
+                        df_txt["SERIE_KEY"] + "_" +
+
+                        df_txt["COMP_KEY"]
+
+                    )
+
+                    # =================================================
+                    # MES
+                    # =================================================
+
+                    df_txt["MES_ENCONTRADO"] = (
+                        obtener_mes(nombre_archivo)
+                    )
+
+                    # =================================================
+                    # GUARDAR
+                    # =================================================
+
+                    lista_sire.append(
+
+                        df_txt[
+                            [
+                                "KEY",
+                                "MES_ENCONTRADO"
+                            ]
+                        ]
+
+                    )
 
                 except Exception as e:
 
@@ -328,7 +385,7 @@ if excel_file and (zip_file or txt_files):
 
                                 contenido = f.read()
 
-                            txt_a_dataframe(
+                            procesar_txt(
                                 file,
                                 contenido
                             )
@@ -341,7 +398,7 @@ if excel_file and (zip_file or txt_files):
 
                 for archivo in txt_files:
 
-                    txt_a_dataframe(
+                    procesar_txt(
                         archivo.name,
                         archivo.read()
                     )
@@ -353,7 +410,7 @@ if excel_file and (zip_file or txt_files):
             if len(lista_sire) == 0:
 
                 st.error(
-                    "No se pudo leer información del SIRE"
+                    "No se pudo leer información SIRE"
                 )
 
                 st.stop()
@@ -368,17 +425,11 @@ if excel_file and (zip_file or txt_files):
             )
 
             # =====================================================
-            # KEY SIRE
+            # ELIMINAR DUPLICADOS
             # =====================================================
 
-            df_sire["KEY"] = (
-
-                df_sire["RUC"] + "_" +
-
-                df_sire["SERIE"] + "_" +
-
-                df_sire["COMPROBANTE"]
-
+            df_sire = df_sire.drop_duplicates(
+                subset=["KEY"]
             )
 
             # =====================================================
@@ -388,10 +439,6 @@ if excel_file and (zip_file or txt_files):
             mapa_mes = (
 
                 df_sire
-
-                .drop_duplicates(
-                    subset=["KEY"]
-                )
 
                 .set_index("KEY")[
                     "MES_ENCONTRADO"
@@ -422,7 +469,7 @@ if excel_file and (zip_file or txt_files):
             )
 
             # =====================================================
-            # ELIMINAR COLUMNAS AUX
+            # LIMPIAR COLUMNAS AUX
             # =====================================================
 
             df_sunat = df_sunat.drop(
