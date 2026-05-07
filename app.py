@@ -231,7 +231,7 @@ if archivos_txt and excel_sunat:
                 ]
 
                 # =========================================
-                # ELIMINAR VACIAS
+                # ELIMINAR COLUMNAS VACIAS
                 # =========================================
 
                 df_txt = df_txt.loc[
@@ -284,7 +284,7 @@ if archivos_txt and excel_sunat:
                     continue
 
                 # =========================================
-                # LIMPIAR
+                # LIMPIAR CAMPOS
                 # =========================================
 
                 df_txt["Nro Doc Identidad"] = (
@@ -303,24 +303,6 @@ if archivos_txt and excel_sunat:
                 )
 
                 # =========================================
-                # KEY
-                # =========================================
-
-                df_txt["KEY"] = (
-
-                    df_txt["Nro Doc Identidad"]
-
-                    + "_"
-
-                    + df_txt["Serie del CDP"]
-
-                    + "_"
-
-                    + df_txt["Nro CP o Doc. Nro Inicial (Rango)"]
-
-                )
-
-                # =========================================
                 # MES
                 # =========================================
 
@@ -333,10 +315,19 @@ if archivos_txt and excel_sunat:
                 lista_sire.append(
 
                     df_txt[
+
                         [
-                            "KEY",
+
+                            "Nro Doc Identidad",
+
+                            "Serie del CDP",
+
+                            "Nro CP o Doc. Nro Inicial (Rango)",
+
                             "MES_ENCONTRADO"
+
                         ]
+
                     ]
 
                 )
@@ -377,14 +368,6 @@ if archivos_txt and excel_sunat:
         )
 
         # =================================================
-        # ELIMINAR DUPLICADOS
-        # =================================================
-
-        df_sire = df_sire.drop_duplicates(
-            subset=["KEY"]
-        )
-
-        # =================================================
         # LEER SUNAT
         # =================================================
 
@@ -422,7 +405,7 @@ if archivos_txt and excel_sunat:
             )
 
         # =================================================
-        # VALIDAR SUNAT
+        # VALIDAR COLUMNAS SUNAT
         # =================================================
 
         columnas_sunat = [
@@ -452,7 +435,7 @@ if archivos_txt and excel_sunat:
             st.stop()
 
         # =================================================
-        # LIMPIAR
+        # LIMPIAR SUNAT
         # =================================================
 
         df_sunat["Número de documento Emisor"] = (
@@ -471,39 +454,34 @@ if archivos_txt and excel_sunat:
         )
 
         # =================================================
-        # KEY SUNAT
-        # =================================================
-
-        df_sunat["KEY"] = (
-
-            df_sunat["Número de documento Emisor"]
-
-            + "_"
-
-            + df_sunat["Número de Serie"]
-
-            + "_"
-
-            + df_sunat["Número de Comprobante"]
-
-        )
-
-        # =================================================
-        # CRUCE
+        # CRUCE DIRECTO
         # =================================================
 
         df_final = df_sunat.merge(
 
-            df_sire[
-                [
-                    "KEY",
-                    "MES_ENCONTRADO"
-                ]
-            ],
+            df_sire,
 
             how="left",
 
-            on="KEY"
+            left_on=[
+
+                "Número de documento Emisor",
+
+                "Número de Serie",
+
+                "Número de Comprobante"
+
+            ],
+
+            right_on=[
+
+                "Nro Doc Identidad",
+
+                "Serie del CDP",
+
+                "Nro CP o Doc. Nro Inicial (Rango)"
+
+            ]
 
         )
 
@@ -520,12 +498,26 @@ if archivos_txt and excel_sunat:
         )
 
         # =================================================
-        # ELIMINAR KEY
+        # ELIMINAR COLUMNAS DUPLICADAS
         # =================================================
 
-        df_final = df_final.drop(
-            columns=["KEY"]
-        )
+        columnas_eliminar = [
+
+            "Nro Doc Identidad",
+
+            "Serie del CDP",
+
+            "Nro CP o Doc. Nro Inicial (Rango)"
+
+        ]
+
+        for col in columnas_eliminar:
+
+            if col in df_final.columns:
+
+                df_final = df_final.drop(
+                    columns=[col]
+                )
 
         # =================================================
         # METRICAS
