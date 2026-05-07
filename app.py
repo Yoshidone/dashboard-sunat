@@ -56,13 +56,13 @@ st.title("📁 CRUCE SUNAT vs SIRE")
 
 st.write("""
 1️⃣ Primero sube los TXT SIRE  
-2️⃣ El sistema leerá la columna CAR SUNAT  
+2️⃣ El sistema leerá automáticamente los CAR SUNAT  
 3️⃣ Luego sube el Excel SUNAT  
 4️⃣ Se hará el match automáticamente
 """)
 
 # =========================================================
-# FUNCION LEER TXT SIRE
+# FUNCION LEER TXT
 # =========================================================
 def leer_txt_sire(contenido, nombre_txt):
 
@@ -76,20 +76,21 @@ def leer_txt_sire(contenido, nombre_txt):
 
             partes = linea.split("|")
 
-            # VALIDAR
-            if len(partes) < 5:
-                continue
+            for valor in partes:
 
-            # CAR SUNAT
-            car = partes[3].strip()
+                valor = str(valor).strip()
 
-            # IGNORAR CABECERA
-            if car != "" and car.upper() != "CAR SUNAT":
+                # VALIDAR POSIBLE CAR
+                if (
+                    len(valor) >= 25
+                    and valor[:11].isdigit()
+                    and any(letra in valor for letra in ["F", "B", "E"])
+                ):
 
-                registros.append({
-                    "CAR_TXT": str(car).strip(),
-                    "ARCHIVO_TXT": nombre_txt
-                })
+                    registros.append({
+                        "CAR_TXT": valor,
+                        "ARCHIVO_TXT": nombre_txt
+                    })
 
         except:
             pass
@@ -98,7 +99,7 @@ def leer_txt_sire(contenido, nombre_txt):
 
 
 # =========================================================
-# FUNCION CREAR CAR
+# FUNCION CREAR CAR DESDE EXCEL SUNAT
 # =========================================================
 def crear_car(row):
 
@@ -108,6 +109,8 @@ def crear_car(row):
         ruc = str(
             row["Número de documento Emisor"]
         ).strip()
+
+        ruc = ruc.replace(".0", "")
 
         # TIPO COMPROBANTE
         tipo = str(
@@ -130,7 +133,7 @@ def crear_car(row):
 
         comprobante = comprobante.replace(".0", "")
 
-        # IMPORTANTE
+        # COMPLETAR CEROS
         comprobante = comprobante.zfill(10)
 
         # CAR FINAL
@@ -143,7 +146,7 @@ def crear_car(row):
 
 
 # =========================================================
-# SUBIR TXT
+# PASO 1 - SUBIR TXT
 # =========================================================
 st.subheader("📂 PASO 1: Subir TXT SIRE")
 
@@ -197,7 +200,7 @@ if tipo_carga == "ZIP":
                         pass
 
 # =========================================================
-# TXT
+# TXT INDIVIDUALES
 # =========================================================
 else:
 
@@ -250,11 +253,9 @@ if len(txt_files) > 0:
 
     df_txt = pd.DataFrame(lista_txt)
 
-    # =====================================================
-    # LIMPIAR
-    # =====================================================
     if not df_txt.empty:
 
+        # LIMPIAR
         df_txt["CAR_TXT"] = (
             df_txt["CAR_TXT"]
             .astype(str)
@@ -263,6 +264,9 @@ if len(txt_files) > 0:
 
         # ELIMINAR DUPLICADOS
         df_txt = df_txt.drop_duplicates()
+
+        # RESETEAR INDEX
+        df_txt = df_txt.reset_index(drop=True)
 
         st.markdown("""
         <div class='success-box'>
@@ -275,11 +279,21 @@ if len(txt_files) > 0:
         st.dataframe(
             df_txt,
             use_container_width=True,
-            height=300
+            height=400
         )
 
+        st.write(f"Total CAR encontrados: {len(df_txt)}")
+
+    else:
+
+        st.markdown("""
+        <div class='warning-box'>
+        ⚠️ No se encontraron CAR válidos en los TXT
+        </div>
+        """, unsafe_allow_html=True)
+
 # =========================================================
-# SUBIR EXCEL SUNAT
+# PASO 2 - SUBIR EXCEL SUNAT
 # =========================================================
 if not df_txt.empty:
 
@@ -349,9 +363,7 @@ if not df_txt.empty:
                     )
                 )
 
-                # =============================================
                 # LIMPIAR
-                # =============================================
                 df_sunat["CAR_GENERADO"] = (
                     df_sunat["CAR_GENERADO"]
                     .astype(str)
@@ -370,12 +382,11 @@ if not df_txt.empty:
                 )
 
                 # =============================================
-                # ESTADO MATCH
+                # ESTADO
                 # =============================================
                 df_resultado["MATCH"] = (
-                    df_resultado[
-                        "ARCHIVO_TXT"
-                    ].apply(
+                    df_resultado["ARCHIVO_TXT"]
+                    .apply(
                         lambda x:
                         "ENCONTRADO"
                         if pd.notnull(x)
@@ -414,9 +425,7 @@ if not df_txt.empty:
                 # =============================================
                 # RESULTADO
                 # =============================================
-                st.subheader(
-                    "📊 Resultado Cruce"
-                )
+                st.subheader("📊 Resultado Cruce")
 
                 st.dataframe(
                     df_resultado,
@@ -425,7 +434,7 @@ if not df_txt.empty:
                 )
 
                 # =============================================
-                # DESCARGAR
+                # DESCARGAR EXCEL
                 # =============================================
                 excel_buffer = io.BytesIO()
 
