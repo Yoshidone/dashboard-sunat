@@ -15,7 +15,6 @@ st.set_page_config(
 )
 
 st.title("📂 CRUCE SUNAT vs SIRE")
-st.markdown("Cruce por RUC + Serie + Número CP")
 
 # =====================================================
 # SUBIR ARCHIVOS
@@ -30,6 +29,52 @@ excel_file = st.file_uploader(
     "📊 Subir Excel SUNAT",
     type=["xlsx"]
 )
+
+# =====================================================
+# FUNCION MES
+# =====================================================
+
+def obtener_mes_desde_txt(nombre_archivo):
+
+    nombre_archivo = str(nombre_archivo)
+
+    if "202501" in nombre_archivo:
+        return "ENERO"
+
+    elif "202502" in nombre_archivo:
+        return "FEBRERO"
+
+    elif "202503" in nombre_archivo:
+        return "MARZO"
+
+    elif "202504" in nombre_archivo:
+        return "ABRIL"
+
+    elif "202505" in nombre_archivo:
+        return "MAYO"
+
+    elif "202506" in nombre_archivo:
+        return "JUNIO"
+
+    elif "202507" in nombre_archivo:
+        return "JULIO"
+
+    elif "202508" in nombre_archivo:
+        return "AGOSTO"
+
+    elif "202509" in nombre_archivo:
+        return "SEPTIEMBRE"
+
+    elif "202510" in nombre_archivo:
+        return "OCTUBRE"
+
+    elif "202511" in nombre_archivo:
+        return "NOVIEMBRE"
+
+    elif "202512" in nombre_archivo:
+        return "DICIEMBRE"
+
+    return "NO ENCONTRADO"
 
 # =====================================================
 # PROCESAR
@@ -56,6 +101,43 @@ if zip_file and excel_file:
             ]
 
             # =====================================================
+            # LIMPIAR EXCEL
+            # =====================================================
+
+            df_excel["Nro Doc Identidad"] = (
+                df_excel["Nro Doc Identidad"]
+                .astype(str)
+                .str.strip()
+            )
+
+            df_excel["Serie del CDP"] = (
+                df_excel["Serie del CDP"]
+                .astype(str)
+                .str.strip()
+            )
+
+            df_excel["Nro CP o Doc. Nro Inicial (Rango)"] = (
+                df_excel["Nro CP o Doc. Nro Inicial (Rango)"]
+                .astype(str)
+                .str.replace(r"\.0$", "", regex=True)
+                .str.strip()
+            )
+
+            # =====================================================
+            # KEY EXCEL
+            # =====================================================
+
+            df_excel["KEY"] = (
+
+                df_excel["Nro Doc Identidad"] + "_" +
+
+                df_excel["Serie del CDP"] + "_" +
+
+                df_excel["Nro CP o Doc. Nro Inicial (Rango)"]
+
+            )
+
+            # =====================================================
             # EXTRAER ZIP
             # =====================================================
 
@@ -77,10 +159,14 @@ if zip_file and excel_file:
                 zip_ref.extractall(temp_dir)
 
             # =====================================================
-            # LEER TXT
+            # DICCIONARIO MATCH
             # =====================================================
 
-            lista_sire = []
+            mapa_match = {}
+
+            # =====================================================
+            # RECORRER TXT
+            # =====================================================
 
             for root, dirs, files in os.walk(temp_dir):
 
@@ -108,52 +194,57 @@ if zip_file and excel_file:
                             ]
 
                             # =====================================================
-                            # OBTENER MES DESDE NOMBRE TXT
+                            # LIMPIAR TXT
                             # =====================================================
 
-                            nombre_archivo = str(file)
+                            df_txt["Nro Doc Identidad"] = (
+                                df_txt["Nro Doc Identidad"]
+                                .astype(str)
+                                .str.strip()
+                            )
 
-                            mes_txt = "NO ENCONTRADO"
+                            df_txt["Serie del CDP"] = (
+                                df_txt["Serie del CDP"]
+                                .astype(str)
+                                .str.strip()
+                            )
 
-                            if "202501" in nombre_archivo:
-                                mes_txt = "ENERO"
+                            df_txt["Nro CP o Doc. Nro Inicial (Rango)"] = (
+                                df_txt["Nro CP o Doc. Nro Inicial (Rango)"]
+                                .astype(str)
+                                .str.replace(r"\.0$", "", regex=True)
+                                .str.strip()
+                            )
 
-                            elif "202502" in nombre_archivo:
-                                mes_txt = "FEBRERO"
+                            # =====================================================
+                            # KEY TXT
+                            # =====================================================
 
-                            elif "202503" in nombre_archivo:
-                                mes_txt = "MARZO"
+                            df_txt["KEY"] = (
 
-                            elif "202504" in nombre_archivo:
-                                mes_txt = "ABRIL"
+                                df_txt["Nro Doc Identidad"] + "_" +
 
-                            elif "202505" in nombre_archivo:
-                                mes_txt = "MAYO"
+                                df_txt["Serie del CDP"] + "_" +
 
-                            elif "202506" in nombre_archivo:
-                                mes_txt = "JUNIO"
+                                df_txt["Nro CP o Doc. Nro Inicial (Rango)"]
 
-                            elif "202507" in nombre_archivo:
-                                mes_txt = "JULIO"
+                            )
 
-                            elif "202508" in nombre_archivo:
-                                mes_txt = "AGOSTO"
+                            # =====================================================
+                            # MES
+                            # =====================================================
 
-                            elif "202509" in nombre_archivo:
-                                mes_txt = "SEPTIEMBRE"
+                            mes = obtener_mes_desde_txt(file)
 
-                            elif "202510" in nombre_archivo:
-                                mes_txt = "OCTUBRE"
+                            # =====================================================
+                            # GUARDAR MATCH
+                            # =====================================================
 
-                            elif "202511" in nombre_archivo:
-                                mes_txt = "NOVIEMBRE"
+                            for key in df_txt["KEY"].unique():
 
-                            elif "202512" in nombre_archivo:
-                                mes_txt = "DICIEMBRE"
+                                if key not in mapa_match:
 
-                            df_txt["MES_ENCONTRADO"] = mes_txt
-
-                            lista_sire.append(df_txt)
+                                    mapa_match[key] = mes
 
                         except Exception as e:
 
@@ -162,128 +253,13 @@ if zip_file and excel_file:
                             )
 
             # =====================================================
-            # VALIDAR
-            # =====================================================
-
-            if len(lista_sire) == 0:
-
-                st.error(
-                    "No se encontraron TXT válidos"
-                )
-
-                st.stop()
-
-            # =====================================================
-            # UNIR SIRE
-            # =====================================================
-
-            df_sire = pd.concat(
-                lista_sire,
-                ignore_index=True
-            )
-
-            # =====================================================
-            # LIMPIAR SIRE
-            # =====================================================
-
-            df_sire["Nro Doc Identidad"] = (
-                df_sire["Nro Doc Identidad"]
-                .astype(str)
-                .str.strip()
-            )
-
-            df_sire["Serie del CDP"] = (
-                df_sire["Serie del CDP"]
-                .astype(str)
-                .str.strip()
-            )
-
-            df_sire["Nro CP o Doc. Nro Inicial (Rango)"] = (
-                df_sire["Nro CP o Doc. Nro Inicial (Rango)"]
-                .astype(str)
-                .str.replace(".0", "", regex=False)
-                .str.strip()
-            )
-
-            # =====================================================
-            # LIMPIAR EXCEL
-            # =====================================================
-
-            df_excel["Nro Doc Identidad"] = (
-                df_excel["Nro Doc Identidad"]
-                .astype(str)
-                .str.strip()
-            )
-
-            df_excel["Serie del CDP"] = (
-                df_excel["Serie del CDP"]
-                .astype(str)
-                .str.strip()
-            )
-
-            df_excel["Nro CP o Doc. Nro Inicial (Rango)"] = (
-                df_excel["Nro CP o Doc. Nro Inicial (Rango)"]
-                .astype(str)
-                .str.replace(".0", "", regex=False)
-                .str.strip()
-            )
-
-            # =====================================================
-            # CREAR KEY SIRE
-            # =====================================================
-
-            df_sire["KEY"] = (
-
-                df_sire["Nro Doc Identidad"] + "_" +
-
-                df_sire["Serie del CDP"] + "_" +
-
-                df_sire["Nro CP o Doc. Nro Inicial (Rango)"]
-
-            )
-
-            # =====================================================
-            # CREAR KEY EXCEL
-            # =====================================================
-
-            df_excel["KEY"] = (
-
-                df_excel["Nro Doc Identidad"] + "_" +
-
-                df_excel["Serie del CDP"] + "_" +
-
-                df_excel["Nro CP o Doc. Nro Inicial (Rango)"]
-
-            )
-
-            # =====================================================
-            # MAPA MES
-            # =====================================================
-
-            mapa_mes = (
-
-                df_sire
-
-                .drop_duplicates(subset=["KEY"])
-
-                .set_index("KEY")["MES_ENCONTRADO"]
-
-                .to_dict()
-
-            )
-
-            # =====================================================
-            # CRUCE
+            # CRUCE FINAL
             # =====================================================
 
             df_excel["MES_ENCONTRADO"] = (
                 df_excel["KEY"]
-                .map(mapa_mes)
+                .map(mapa_match)
             )
-
-            # =====================================================
-            # RELLENAR VACIOS
-            # =====================================================
 
             df_excel["MES_ENCONTRADO"] = (
                 df_excel["MES_ENCONTRADO"]
@@ -299,12 +275,10 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # RESULTADOS
+            # METRICAS
             # =====================================================
 
-            st.success(
-                "✅ Cruce completado correctamente"
-            )
+            st.success("✅ Cruce completado correctamente")
 
             col1, col2 = st.columns(2)
 
@@ -329,6 +303,10 @@ if zip_file and excel_file:
                     "Coincidencias",
                     encontrados
                 )
+
+            # =====================================================
+            # MOSTRAR
+            # =====================================================
 
             st.dataframe(
                 df_excel,
@@ -356,7 +334,7 @@ if zip_file and excel_file:
             output.seek(0)
 
             st.download_button(
-                label="📥 DESCARGAR CRUCE FINAL",
+                label="📥 DESCARGAR EXCEL FINAL",
                 data=output,
                 file_name="CRUCE_SUNAT_SIRE.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
