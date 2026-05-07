@@ -257,7 +257,7 @@ if excel_file and (zip_file or txt_files):
                     # VALIDAR COLUMNAS
                     # =================================================
 
-                    if len(df_txt.columns) < 13:
+                    if len(df_txt.columns) < 14:
 
                         st.warning(
                             f"{nombre_archivo} no tiene suficientes columnas"
@@ -271,9 +271,9 @@ if excel_file and (zip_file or txt_files):
 
                     columnas = {
 
-                        7: "Serie del CDP",
-                        9: "Nro CP o Doc. Nro Inicial (Rango)",
-                        12: "Nro Doc Identidad"
+                        8: "Serie del CDP",
+                        10: "Nro CP o Doc. Nro Inicial (Rango)",
+                        13: "Nro Doc Identidad"
 
                     }
 
