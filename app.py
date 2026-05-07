@@ -4,6 +4,10 @@ import zipfile
 import io
 import re
 
+# =====================================================
+# CONFIG
+# =====================================================
+
 st.set_page_config(
     page_title="CRUCE SUNAT vs SIRE",
     layout="wide"
@@ -77,20 +81,6 @@ def leer_txt_sire(contenido_txt, nombre_txt):
     )
 
     # =====================================================
-    # DIAGNOSTICO
-    # =====================================================
-
-    st.subheader(f"🔍 DIAGNÓSTICO - {nombre_txt}")
-
-    lineas = texto.splitlines()
-
-    st.write("Primeras líneas RAW:")
-
-    for i, linea in enumerate(lineas[:5]):
-
-        st.code(f"Línea {i}: {repr(linea)}")
-
-    # =====================================================
     # LEER TXT
     # =====================================================
 
@@ -120,21 +110,19 @@ def leer_txt_sire(contenido_txt, nombre_txt):
 
     ]
 
-    st.write("Columnas detectadas:")
-
-    st.write(df.columns.tolist())
-
-    st.write("Primeras filas:")
-
-    st.dataframe(df.head(3))
-
     # =====================================================
     # LIMPIAR DATA
     # =====================================================
 
     for col in df.columns:
 
-        df[col] = df[col].astype(str).apply(limpiar_texto)
+        df[col] = (
+
+            df[col]
+            .astype(str)
+            .apply(limpiar_texto)
+
+        )
 
     # =====================================================
     # CREAR KEY
@@ -142,11 +130,21 @@ def leer_txt_sire(contenido_txt, nombre_txt):
 
     df["KEY"] = (
 
-        df["NRO DOC IDENTIDAD"] + "_" +
+        df["Nro Doc Identidad"]
+        .astype(str)
+        .apply(limpiar_texto)
 
-        df["SERIE DEL CDP"] + "_" +
+        + "_"
 
-        df["NRO CP O DOC. NRO INICIAL (RANGO)"]
+        + df["Serie del CDP"]
+        .astype(str)
+        .apply(limpiar_texto)
+
+        + "_"
+
+        + df["Nro CP o Doc. Nro Inicial (Rango)"]
+        .astype(str)
+        .apply(limpiar_texto)
 
     )
 
@@ -265,7 +263,7 @@ if archivos_txt:
         )
 
         st.info(
-            "Ahora sube el archivo SUNAT."
+            "📊 Ahora sube el archivo SUNAT."
         )
 
 # =====================================================
@@ -300,6 +298,10 @@ if archivo_sunat and dfs_sire:
 
         )
 
+        # =====================================================
+        # LIMPIAR COLUMNAS
+        # =====================================================
+
         df_sunat.columns = [
 
             str(col).strip()
@@ -309,7 +311,7 @@ if archivo_sunat and dfs_sire:
         ]
 
         # =====================================================
-        # LIMPIAR SUNAT
+        # LIMPIAR DATA
         # =====================================================
 
         columnas_sunat = [
@@ -338,16 +340,20 @@ if archivo_sunat and dfs_sire:
 
         df_sunat["KEY"] = (
 
-            df_sunat["Número de documento Emisor"] + "_" +
+            df_sunat["Número de documento Emisor"]
 
-            df_sunat["Número de Serie"] + "_" +
+            + "_"
 
-            df_sunat["Número de Comprobante"]
+            + df_sunat["Número de Serie"]
+
+            + "_"
+
+            + df_sunat["Número de Comprobante"]
 
         )
 
         # =====================================================
-        # UNIR SIRE
+        # UNIR TODOS LOS TXT
         # =====================================================
 
         df_sire_total = pd.concat(
@@ -375,13 +381,15 @@ if archivo_sunat and dfs_sire:
         )
 
         # =====================================================
-        # MATCH
+        # HACER MATCH
         # =====================================================
 
         df_sunat["MES_ENCONTRADO"] = (
 
             df_sunat["KEY"]
+
             .map(diccionario_meses)
+
             .fillna("NO ENCONTRADO")
 
         )
@@ -393,11 +401,14 @@ if archivo_sunat and dfs_sire:
         coincidencias = (
 
             df_sunat["MES_ENCONTRADO"]
+
             != "NO ENCONTRADO"
 
         ).sum()
 
-        st.success("✅ Cruce completado correctamente")
+        st.success(
+            "✅ Cruce completado correctamente"
+        )
 
         col1, col2 = st.columns(2)
 
@@ -412,16 +423,43 @@ if archivo_sunat and dfs_sire:
         )
 
         # =====================================================
-        # MOSTRAR
+        # MOSTRAR RESULTADO
         # =====================================================
 
+        columnas_mostrar = [
+
+            "Número de documento Emisor",
+
+            "Nombre o Raz. Social del emisor",
+
+            "Fecha de emisión del comprobante",
+
+            "Tipo de Comprobante",
+
+            "Descripción del comprobante",
+
+            "Número de Serie",
+
+            "Número de Comprobante",
+
+            "Compras Gravadas Imputadas S/",
+
+            "IGV de las Compras gravadas imputadas [2]",
+
+            "MES_ENCONTRADO"
+
+        ]
+
         st.dataframe(
-            df_sunat,
+
+            df_sunat[columnas_mostrar],
+
             use_container_width=True
+
         )
 
         # =====================================================
-        # DESCARGA
+        # DESCARGAR
         # =====================================================
 
         salida = io.BytesIO()
