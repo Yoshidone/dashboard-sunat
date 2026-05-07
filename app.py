@@ -17,20 +17,7 @@ st.set_page_config(
 st.title("📂 CRUCE SUNAT vs SIRE")
 
 st.markdown("""
-Cruza automáticamente:
-
-SIRE TXT:
-- Nro Doc Identidad
-- Serie del CDP
-- Nro CP o Doc. Nro Inicial (Rango)
-
-VS
-
-SUNAT:
-- Número de documento Emisor
-- Número de Serie
-- Número de Comprobante
-
+Cruza automáticamente los TXT SIRE con el Excel SUNAT
 y devuelve el MES donde fue encontrado.
 """)
 
@@ -157,7 +144,6 @@ if excel_file and (zip_file or txt_files):
 
                 nombre = str(col).lower()
 
-                # RUC
                 if (
                     "documento" in nombre
                     and "emisor" in nombre
@@ -165,12 +151,10 @@ if excel_file and (zip_file or txt_files):
 
                     col_ruc = col
 
-                # SERIE
                 elif "serie" in nombre:
 
                     col_serie = col
 
-                # COMPROBANTE
                 elif (
                     "comprobante" in nombre
                     and "tipo" not in nombre
@@ -179,7 +163,7 @@ if excel_file and (zip_file or txt_files):
                     col_comp = col
 
             # =====================================================
-            # VALIDAR COLUMNAS
+            # VALIDAR
             # =====================================================
 
             if col_ruc is None:
@@ -232,13 +216,13 @@ if excel_file and (zip_file or txt_files):
             )
 
             # =====================================================
-            # DATA SIRE
+            # LISTA SIRE
             # =====================================================
 
             lista_sire = []
 
             # =====================================================
-            # FUNCION PROCESAR TXT
+            # FUNCION TXT
             # =====================================================
 
             def procesar_txt(nombre_archivo, contenido):
@@ -253,6 +237,7 @@ if excel_file and (zip_file or txt_files):
                         BytesIO(contenido),
                         sep="|",
                         header=None,
+                        skiprows=1,
                         dtype=str,
                         encoding="utf-8",
                         engine="python",
@@ -272,14 +257,8 @@ if excel_file and (zip_file or txt_files):
                         return
 
                     # =================================================
-                    # COLUMNAS REALES
-                    # =================================================
-                    #
-                    # 8  = Serie del CDP
-                    # 10 = Nro CP
-                    # 13 = Nro Doc Identidad
-                    #
-                    # =================================================
+                    # COLUMNAS TXT
+                    # =====================================================
 
                     df_txt = df_txt.rename(
                         columns={
@@ -294,8 +273,8 @@ if excel_file and (zip_file or txt_files):
                     )
 
                     # =================================================
-                    # LIMPIAR
-                    # =================================================
+                    # LIMPIAR TXT
+                    # =====================================================
 
                     df_txt["RUC_KEY"] = (
                         df_txt["Nro Doc"]
@@ -313,7 +292,7 @@ if excel_file and (zip_file or txt_files):
                     )
 
                     # =================================================
-                    # KEY SIRE
+                    # KEY TXT
                     # =====================================================
 
                     df_txt["KEY"] = (
@@ -332,30 +311,15 @@ if excel_file and (zip_file or txt_files):
 
                     # =================================================
                     # MES
-                    # =================================================
+                    # =====================================================
 
                     df_txt["MES_ENCONTRADO"] = (
                         obtener_mes(nombre_archivo)
                     )
 
                     # =================================================
-                    # DEBUG
-                    # =================================================
-
-                    st.write(f"📄 {nombre_archivo}")
-                    st.write(df_txt[
-                        [
-                            "RUC_KEY",
-                            "SERIE_KEY",
-                            "COMP_KEY",
-                            "KEY",
-                            "MES_ENCONTRADO"
-                        ]
-                    ].head())
-
-                    # =================================================
                     # GUARDAR
-                    # =================================================
+                    # =====================================================
 
                     lista_sire.append(
 
@@ -479,20 +443,6 @@ if excel_file and (zip_file or txt_files):
             )
 
             # =====================================================
-            # DEBUG SUNAT
-            # =====================================================
-
-            st.write("### DEBUG SUNAT")
-            st.write(df_sunat[
-                [
-                    col_ruc,
-                    col_serie,
-                    col_comp,
-                    "KEY"
-                ]
-            ].head())
-
-            # =====================================================
             # CRUCE
             # =====================================================
 
@@ -542,12 +492,14 @@ if excel_file and (zip_file or txt_files):
             c1, c2 = st.columns(2)
 
             with c1:
+
                 st.metric(
                     "Total registros",
                     len(df_sunat)
                 )
 
             with c2:
+
                 st.metric(
                     "Coincidencias",
                     encontrados
