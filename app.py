@@ -80,14 +80,14 @@ def leer_txt_sire(contenido, nombre_txt):
             if len(partes) < 5:
                 continue
 
-            # COLUMNA CAR SUNAT
+            # CAR SUNAT
             car = partes[3].strip()
 
-            # EVITAR ENCABEZADO
+            # IGNORAR CABECERA
             if car != "" and car.upper() != "CAR SUNAT":
 
                 registros.append({
-                    "CAR_TXT": car,
+                    "CAR_TXT": str(car).strip(),
                     "ARCHIVO_TXT": nombre_txt
                 })
 
@@ -98,7 +98,7 @@ def leer_txt_sire(contenido, nombre_txt):
 
 
 # =========================================================
-# FUNCION CREAR CAR DESDE SUNAT
+# FUNCION CREAR CAR
 # =========================================================
 def crear_car(row):
 
@@ -130,12 +130,13 @@ def crear_car(row):
 
         comprobante = comprobante.replace(".0", "")
 
-        comprobante = comprobante.zfill(8)
+        # IMPORTANTE
+        comprobante = comprobante.zfill(10)
 
         # CAR FINAL
         car = f"{ruc}{tipo}{serie}{comprobante}"
 
-        return car
+        return str(car).strip()
 
     except:
         return ""
@@ -302,7 +303,9 @@ if not df_txt.empty:
                 archivo_sunat
             )
 
+            # =================================================
             # LIMPIAR COLUMNAS
+            # =================================================
             df_sunat.columns = (
                 df_sunat.columns
                 .str.strip()
@@ -337,7 +340,7 @@ if not df_txt.empty:
             else:
 
                 # =============================================
-                # CREAR CAR_GENERADO
+                # CREAR CAR
                 # =============================================
                 df_sunat["CAR_GENERADO"] = (
                     df_sunat.apply(
@@ -346,7 +349,9 @@ if not df_txt.empty:
                     )
                 )
 
+                # =============================================
                 # LIMPIAR
+                # =============================================
                 df_sunat["CAR_GENERADO"] = (
                     df_sunat["CAR_GENERADO"]
                     .astype(str)
@@ -379,7 +384,7 @@ if not df_txt.empty:
                 )
 
                 # =============================================
-                # CONTADOR
+                # CONTADORES
                 # =============================================
                 encontrados = (
                     df_resultado["MATCH"]
@@ -420,7 +425,7 @@ if not df_txt.empty:
                 )
 
                 # =============================================
-                # DESCARGAR EXCEL
+                # DESCARGAR
                 # =============================================
                 excel_buffer = io.BytesIO()
 
