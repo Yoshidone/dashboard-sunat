@@ -15,18 +15,54 @@ st.set_page_config(
 )
 
 st.title("📂 CRUCE SUNAT vs SIRE")
-st.markdown(
-    "Cruza el Excel SUNAT con los TXT SIRE y agrega el MES donde fue encontrado."
-)
+
+st.markdown("""
+Cruza:
+
+SIRE:
+- Nro Doc Identidad
+- Serie del CDP
+- Nro CP o Doc. Nro Inicial (Rango)
+
+VS
+
+SUNAT:
+- Número de documento Emisor
+- Número de Serie
+- Número de Comprobante
+
+y agrega el MES donde fue encontrado.
+""")
 
 # =====================================================
 # SUBIR ARCHIVOS
 # =====================================================
 
-zip_file = st.file_uploader(
-    "📦 Subir ZIP SIRE",
-    type=["zip"]
+modo = st.radio(
+    "Selecciona cómo subir archivos SIRE:",
+    [
+        "ZIP",
+        "CARPETA TXT"
+    ]
 )
+
+zip_file = None
+txt_files = None
+
+if modo == "ZIP":
+
+    zip_file = st.file_uploader(
+        "📦 Subir ZIP SIRE",
+        type=["zip"]
+    )
+
+else:
+
+    txt_files = st.file_uploader(
+        "📂 Subir TXT del SIRE",
+        type=["txt"],
+        accept_multiple_files=True
+    )
 
 excel_file = st.file_uploader(
     "📊 Subir Excel SUNAT",
@@ -83,7 +119,7 @@ def obtener_mes(nombre_archivo):
 # PROCESAR
 # =====================================================
 
-if zip_file and excel_file:
+if excel_file and (zip_file or txt_files):
 
     try:
 
@@ -128,29 +164,23 @@ if zip_file and excel_file:
                     col_comprobante = col
 
             # =====================================================
-            # VALIDAR COLUMNAS
+            # VALIDAR
             # =====================================================
 
             if col_ruc is None:
-                st.error(
-                    "No se encontró columna Número de documento Emisor"
-                )
+                st.error("No se encontró columna RUC")
                 st.stop()
 
             if col_serie is None:
-                st.error(
-                    "No se encontró columna Número de Serie"
-                )
+                st.error("No se encontró columna Serie")
                 st.stop()
 
             if col_comprobante is None:
-                st.error(
-                    "No se encontró columna Número de Comprobante"
-                )
+                st.error("No se encontró columna Comprobante")
                 st.stop()
 
             # =====================================================
-            # LIMPIAR COLUMNAS SUNAT
+            # LIMPIAR SUNAT
             # =====================================================
 
             df_excel[col_ruc] = (
@@ -163,6 +193,7 @@ if zip_file and excel_file:
                 df_excel[col_serie]
                 .astype(str)
                 .str.strip()
+                .str.upper()
             )
 
             df_excel[col_comprobante] = (
@@ -173,7 +204,7 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # CREAR KEY SUNAT
+            # KEY SUNAT
             # =====================================================
 
             df_excel["KEY"] = (
@@ -187,161 +218,132 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # EXTRAER ZIP
-            # =====================================================
-
-            temp_dir = tempfile.mkdtemp()
-
-            zip_path = os.path.join(
-                temp_dir,
-                "sire.zip"
-            )
-
-            with open(zip_path, "wb") as f:
-                f.write(zip_file.getbuffer())
-
-            with zipfile.ZipFile(
-                zip_path,
-                'r'
-            ) as zip_ref:
-
-                zip_ref.extractall(temp_dir)
-
-            # =====================================================
-            # DICCIONARIO MATCH
+            # MAPA MATCH
             # =====================================================
 
             mapa_match = {}
 
             # =====================================================
-            # RECORRER TXT
+            # FUNCION PROCESAR TXT
             # =====================================================
 
-            for root, dirs, files in os.walk(temp_dir):
+            def procesar_txt(nombre_archivo, contenido):
 
-                for file in files:
+                try:
 
-                    if file.endswith(".txt"):
+                    lineas = contenido.decode(
+                        "utf-8",
+                        errors="ignore"
+                    ).splitlines()
 
-                        ruta_txt = os.path.join(
-                            root,
-                            file
-                        )
+                    registros = []
+
+                    for linea in lineas:
+
+                        partes = linea.split("|")
+
+                        if len(partes) < 11:
+                            continue
 
                         try:
 
-                            # =====================================================
-                            # LEER TXT
-                            # =====================================================
+                            serie = str(partes[5]).strip().upper()
 
-                            df_txt = pd.read_csv(
+                            numero = (
+                                str(partes[7])
+                                .replace(".0", "")
+                                .strip()
+                            )
+
+                            ruc = str(partes[10]).strip()
+
+                            key = (
+
+                                ruc + "_" +
+
+                                serie + "_" +
+
+                                numero
+
+                            )
+
+                            registros.append(key)
+
+                        except:
+                            pass
+
+                    mes = obtener_mes(nombre_archivo)
+
+                    for key in registros:
+
+                        if key not in mapa_match:
+
+                            mapa_match[key] = mes
+
+                except Exception as e:
+
+                    st.warning(
+                        f"Error leyendo {nombre_archivo}: {e}"
+                    )
+
+            # =====================================================
+            # ZIP
+            # =====================================================
+
+            if zip_file:
+
+                temp_dir = tempfile.mkdtemp()
+
+                zip_path = os.path.join(
+                    temp_dir,
+                    "sire.zip"
+                )
+
+                with open(zip_path, "wb") as f:
+                    f.write(zip_file.getbuffer())
+
+                with zipfile.ZipFile(
+                    zip_path,
+                    'r'
+                ) as zip_ref:
+
+                    zip_ref.extractall(temp_dir)
+
+                for root, dirs, files in os.walk(temp_dir):
+
+                    for file in files:
+
+                        if file.endswith(".txt"):
+
+                            ruta_txt = os.path.join(
+                                root,
+                                file
+                            )
+
+                            with open(
                                 ruta_txt,
-                                sep="|",
-                                dtype=str,
-                                encoding="utf-8",
-                                header=None
+                                "rb"
+                            ) as f:
+
+                                contenido = f.read()
+
+                            procesar_txt(
+                                file,
+                                contenido
                             )
 
-                            # =====================================================
-                            # ASIGNAR COLUMNAS SIRE
-                            # =====================================================
+            # =====================================================
+            # CARPETA TXT
+            # =====================================================
 
-                            columnas = [
+            if txt_files:
 
-                                "Periodo",
-                                "CAR SUNAT",
-                                "Fecha Emision",
-                                "Fecha Vcto",
-                                "Tipo CP",
-                                "Serie del CDP",
-                                "Año",
-                                "Nro CP o Doc. Nro Inicial (Rango)",
-                                "Nro Final",
-                                "Tipo Doc",
-                                "Nro Doc Identidad",
-                                "Apellidos",
-                                "Nombre",
-                                "BI Gravado",
-                                "IGV",
-                                "Adq Gravadas",
-                                "ISC",
-                                "ICBP",
-                                "Otros Tributos",
-                                "Total CP",
-                                "Moneda",
-                                "Tipo Cambio",
-                                "Fecha Doc Modificado",
-                                "Tipo CP Modificado",
-                                "Serie CP Modificado",
-                                "Nro CP Modificado",
-                                "ID Proyecto",
-                                "CUO",
-                                "Detraccion",
-                                "Medio Pago",
-                                "Estado"
+                for archivo in txt_files:
 
-                            ]
-
-                            df_txt.columns = columnas[:len(df_txt.columns)]
-
-                            # =====================================================
-                            # LIMPIAR COLUMNAS SIRE
-                            # =====================================================
-
-                            df_txt["Nro Doc Identidad"] = (
-                                df_txt["Nro Doc Identidad"]
-                                .astype(str)
-                                .str.strip()
-                            )
-
-                            df_txt["Serie del CDP"] = (
-                                df_txt["Serie del CDP"]
-                                .astype(str)
-                                .str.strip()
-                            )
-
-                            df_txt["Nro CP o Doc. Nro Inicial (Rango)"] = (
-                                df_txt["Nro CP o Doc. Nro Inicial (Rango)"]
-                                .astype(str)
-                                .str.replace(r"\.0$", "", regex=True)
-                                .str.strip()
-                            )
-
-                            # =====================================================
-                            # CREAR KEY TXT
-                            # =====================================================
-
-                            df_txt["KEY"] = (
-
-                                df_txt["Nro Doc Identidad"] + "_" +
-
-                                df_txt["Serie del CDP"] + "_" +
-
-                                df_txt["Nro CP o Doc. Nro Inicial (Rango)"]
-
-                            )
-
-                            # =====================================================
-                            # OBTENER MES
-                            # =====================================================
-
-                            mes = obtener_mes(file)
-
-                            # =====================================================
-                            # GUARDAR MATCH
-                            # =====================================================
-
-                            for key in df_txt["KEY"].unique():
-
-                                if key not in mapa_match:
-
-                                    mapa_match[key] = mes
-
-                        except Exception as e:
-
-                            st.warning(
-                                f"Error leyendo {file}: {e}"
-                            )
+                    procesar_txt(
+                        archivo.name,
+                        archivo.read()
+                    )
 
             # =====================================================
             # CRUCE FINAL
@@ -351,10 +353,6 @@ if zip_file and excel_file:
                 df_excel["KEY"]
                 .map(mapa_match)
             )
-
-            # =====================================================
-            # RELLENAR VACIOS
-            # =====================================================
 
             df_excel["MES_ENCONTRADO"] = (
                 df_excel["MES_ENCONTRADO"]
@@ -370,8 +368,16 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # RESULTADOS
+            # METRICAS
             # =====================================================
+
+            encontrados = (
+
+                df_excel["MES_ENCONTRADO"]
+
+                != "NO ENCONTRADO"
+
+            ).sum()
 
             st.success(
                 "✅ Cruce completado correctamente"
@@ -388,31 +394,23 @@ if zip_file and excel_file:
 
             with col2:
 
-                encontrados = (
-
-                    df_excel["MES_ENCONTRADO"]
-
-                    != "NO ENCONTRADO"
-
-                ).sum()
-
                 st.metric(
                     "Coincidencias",
                     encontrados
                 )
 
             # =====================================================
-            # MOSTRAR TABLA
+            # MOSTRAR
             # =====================================================
 
             st.dataframe(
                 df_excel,
                 use_container_width=True,
-                height=650
+                height=700
             )
 
             # =====================================================
-            # EXPORTAR EXCEL FINAL
+            # EXPORTAR
             # =====================================================
 
             output = BytesIO()
