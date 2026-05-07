@@ -98,6 +98,20 @@ def limpiar(valor):
 
     valor = str(valor)
 
+    # ============================================
+    # CORREGIR NOTACION CIENTIFICA
+    # ============================================
+
+    if "E+" in valor.upper():
+
+        try:
+
+            valor = str(int(float(valor)))
+
+        except:
+
+            pass
+
     valor = valor.replace(".0", "")
     valor = valor.replace("-", "")
     valor = valor.replace(" ", "")
@@ -144,6 +158,7 @@ if excel_file and (zip_file or txt_files):
 
                 nombre = str(col).lower()
 
+                # RUC
                 if (
                     "documento" in nombre
                     and "emisor" in nombre
@@ -151,10 +166,12 @@ if excel_file and (zip_file or txt_files):
 
                     col_ruc = col
 
+                # SERIE
                 elif "serie" in nombre:
 
                     col_serie = col
 
+                # COMPROBANTE
                 elif (
                     "comprobante" in nombre
                     and "tipo" not in nombre
@@ -179,39 +196,20 @@ if excel_file and (zip_file or txt_files):
                 st.stop()
 
             # =====================================================
-            # LIMPIAR SUNAT
-            # =====================================================
-
-            df_sunat["RUC_KEY"] = (
-                df_sunat[col_ruc]
-                .apply(limpiar)
-            )
-
-            df_sunat["SERIE_KEY"] = (
-                df_sunat[col_serie]
-                .apply(limpiar)
-            )
-
-            df_sunat["COMP_KEY"] = (
-                df_sunat[col_comp]
-                .apply(limpiar)
-            )
-
-            # =====================================================
-            # KEY SUNAT
+            # CREAR KEY SUNAT
             # =====================================================
 
             df_sunat["KEY"] = (
 
-                df_sunat["RUC_KEY"]
+                df_sunat[col_ruc].apply(limpiar)
 
                 + "_"
 
-                + df_sunat["SERIE_KEY"]
+                + df_sunat[col_serie].apply(limpiar)
 
                 + "_"
 
-                + df_sunat["COMP_KEY"]
+                + df_sunat[col_comp].apply(limpiar)
 
             )
 
@@ -257,55 +255,40 @@ if excel_file and (zip_file or txt_files):
                         return
 
                     # =================================================
-                    # COLUMNAS TXT
-                    # =====================================================
+                    # COLUMNAS REALES SIRE
+                    # =================================================
+                    #
+                    # H = 8  = Serie del CDP
+                    # J = 10 = Nro CP
+                    # M = 13 = Nro Doc Identidad
+                    #
+                    # =================================================
 
                     df_txt = df_txt.rename(
                         columns={
 
-                            8: "Serie del CDP",
-
-                            10: "Nro CP",
-
-                            13: "Nro Doc"
+                            8: "SERIE",
+                            10: "COMP",
+                            13: "RUC"
 
                         }
                     )
 
                     # =================================================
-                    # LIMPIAR TXT
-                    # =====================================================
-
-                    df_txt["RUC_KEY"] = (
-                        df_txt["Nro Doc"]
-                        .apply(limpiar)
-                    )
-
-                    df_txt["SERIE_KEY"] = (
-                        df_txt["Serie del CDP"]
-                        .apply(limpiar)
-                    )
-
-                    df_txt["COMP_KEY"] = (
-                        df_txt["Nro CP"]
-                        .apply(limpiar)
-                    )
-
-                    # =================================================
-                    # KEY TXT
+                    # CREAR KEY SIRE
                     # =====================================================
 
                     df_txt["KEY"] = (
 
-                        df_txt["RUC_KEY"]
+                        df_txt["RUC"].apply(limpiar)
 
                         + "_"
 
-                        + df_txt["SERIE_KEY"]
+                        + df_txt["SERIE"].apply(limpiar)
 
                         + "_"
 
-                        + df_txt["COMP_KEY"]
+                        + df_txt["COMP"].apply(limpiar)
 
                     )
 
@@ -463,16 +446,11 @@ if excel_file and (zip_file or txt_files):
             )
 
             # =====================================================
-            # LIMPIAR AUX
+            # ELIMINAR KEY
             # =====================================================
 
             df_sunat = df_sunat.drop(
-                columns=[
-                    "RUC_KEY",
-                    "SERIE_KEY",
-                    "COMP_KEY",
-                    "KEY"
-                ]
+                columns=["KEY"]
             )
 
             # =====================================================
