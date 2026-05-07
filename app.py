@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import zipfile
 import io
-import re
 
 # =========================================================
 # CONFIG
@@ -31,11 +30,6 @@ h1 {
     font-weight: 800;
 }
 
-.stDataFrame {
-    border-radius: 12px;
-    overflow: hidden;
-}
-
 .success-box {
     background: #dcfce7;
     padding: 15px;
@@ -60,27 +54,50 @@ h1 {
 # =========================================================
 st.title("📁 CRUCE SUNAT vs SIRE")
 
-st.write("Convierte TXT SIRE y realiza cruce con archivo SUNAT.")
+st.write("""
+1️⃣ Primero sube los TXT SIRE  
+2️⃣ El sistema leerá el CAR SUNAT  
+3️⃣ Luego sube el Excel SUNAT  
+4️⃣ Se hará el match automáticamente
+""")
 
 # =========================================================
-# FUNCION EXTRAER CAR DESDE TXT
+# FUNCION LEER TXT
 # =========================================================
-def extraer_car_txt(texto):
+def leer_txt_sire(contenido, nombre_txt):
 
-    """
-    Extrae CAR tipo:
-    20553618518F001000011037
-    """
+    registros = []
 
-    patron = r'(\d{11}[A-Z0-9]{1,10}\d{1,20})'
+    lineas = contenido.splitlines()
 
-    encontrados = re.findall(patron, texto)
+    for linea in lineas:
 
-    return list(set(encontrados))
+        try:
+
+            partes = linea.split("|")
+
+            # VALIDAR
+            if len(partes) < 5:
+                continue
+
+            # CAR SUNAT
+            car = partes[3].strip()
+
+            if car != "":
+
+                registros.append({
+                    "CAR_TXT": car,
+                    "ARCHIVO_TXT": nombre_txt
+                })
+
+        except:
+            pass
+
+    return registros
 
 
 # =========================================================
-# FUNCION CREAR CAR DESDE SUNAT
+# FUNCION CREAR CAR SUNAT
 # =========================================================
 def crear_car(row):
 
@@ -92,10 +109,8 @@ def crear_car(row):
 
         comprobante = str(row["Número de Comprobante"]).strip()
 
-        # quitar .0 de excel
         comprobante = comprobante.replace(".0", "")
 
-        # completar ceros
         comprobante = comprobante.zfill(8)
 
         car = f"{ruc}{serie}{comprobante}"
@@ -107,40 +122,9 @@ def crear_car(row):
 
 
 # =========================================================
-# SUBIR SUNAT
+# SUBIR TXT PRIMERO
 # =========================================================
-st.subheader("📄 Subir Excel SUNAT")
-
-archivo_sunat = st.file_uploader(
-    "Sube archivo SUNAT",
-    type=["xlsx", "xls"]
-)
-
-df_sunat = None
-
-if archivo_sunat:
-
-    try:
-
-        df_sunat = pd.read_excel(archivo_sunat)
-
-        # limpiar columnas
-        df_sunat.columns = df_sunat.columns.str.strip()
-
-        st.success("✅ Archivo SUNAT cargado")
-
-        st.write("Columnas detectadas:")
-
-        st.write(list(df_sunat.columns))
-
-    except Exception as e:
-
-        st.error(f"Error leyendo Excel: {e}")
-
-# =========================================================
-# SUBIR SIRE
-# =========================================================
-st.subheader("📂 Selecciona carga SIRE")
+st.subheader("📂 PASO 1: Subir TXT SIRE")
 
 tipo_carga = st.radio(
     "",
@@ -215,136 +199,173 @@ else:
                 pass
 
 # =========================================================
-# PROCESAR
+# LEER TXT Y CREAR DF
 # =========================================================
-if df_sunat is not None and len(txt_files) > 0:
+df_txt = pd.DataFrame()
+
+if len(txt_files) > 0:
+
+    lista_txt = []
+
+    for txt in txt_files:
+
+        nombre_txt = txt["nombre"]
+
+        contenido_txt = txt["contenido"]
+
+        registros = leer_txt_sire(
+            contenido_txt,
+            nombre_txt
+        )
+
+        lista_txt.extend(registros)
+
+    df_txt = pd.DataFrame(lista_txt)
+
+    if not df_txt.empty:
+
+        st.markdown("""
+        <div class='success-box'>
+        ✅ TXT leídos correctamente
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.subheader("📊 CAR encontrados en TXT")
+
+        st.dataframe(
+            df_txt,
+            use_container_width=True,
+            height=300
+        )
+
+# =========================================================
+# SUBIR SUNAT DESPUES
+# =========================================================
+if not df_txt.empty:
 
     st.divider()
 
-    columnas_necesarias = [
-        "Número de documento Emisor",
-        "Número de Serie",
-        "Número de Comprobante"
-    ]
+    st.subheader("📄 PASO 2: Subir Excel SUNAT")
 
-    faltantes = [
-        col for col in columnas_necesarias
-        if col not in df_sunat.columns
-    ]
+    archivo_sunat = st.file_uploader(
+        "Sube archivo SUNAT",
+        type=["xlsx", "xls"]
+    )
 
-    if len(faltantes) > 0:
+    if archivo_sunat:
 
-        st.error(f"❌ Faltan columnas: {faltantes}")
+        try:
 
-    else:
+            df_sunat = pd.read_excel(archivo_sunat)
 
-        # =================================================
-        # CREAR CAR DESDE SUNAT
-        # =================================================
-        df_sunat["CAR_GENERADO"] = df_sunat.apply(
-            crear_car,
-            axis=1
-        )
-
-        # normalizar
-        df_sunat["CAR_GENERADO"] = (
-            df_sunat["CAR_GENERADO"]
-            .astype(str)
-            .str.strip()
-        )
-
-        # =================================================
-        # EXTRAER CAR DESDE TXT
-        # =================================================
-        lista_txt = []
-
-        for txt in txt_files:
-
-            nombre_txt = txt["nombre"]
-
-            contenido_txt = txt["contenido"]
-
-            cars = extraer_car_txt(contenido_txt)
-
-            for car in cars:
-
-                lista_txt.append({
-                    "CAR_TXT": car.strip(),
-                    "ARCHIVO_TXT": nombre_txt
-                })
-
-        # =================================================
-        # DATAFRAME TXT
-        # =================================================
-        df_txt = pd.DataFrame(lista_txt)
-
-        if df_txt.empty:
-
-            st.warning("⚠️ No se encontraron CAR en los TXT")
-
-        else:
-
-            # =================================================
-            # MATCH
-            # =================================================
-            df_resultado = pd.merge(
-                df_sunat,
-                df_txt,
-                left_on="CAR_GENERADO",
-                right_on="CAR_TXT",
-                how="left"
+            df_sunat.columns = (
+                df_sunat.columns.str.strip()
             )
 
-            # =================================================
-            # ESTADO MATCH
-            # =================================================
-            df_resultado["MATCH"] = df_resultado[
-                "ARCHIVO_TXT"
-            ].apply(
-                lambda x: "ENCONTRADO"
-                if pd.notnull(x)
-                else "NO ENCONTRADO"
-            )
+            st.success("✅ Excel SUNAT cargado")
 
             # =================================================
-            # RESULTADO
+            # VALIDAR COLUMNAS
             # =================================================
-            encontrados = (
-                df_resultado["MATCH"] == "ENCONTRADO"
-            ).sum()
+            columnas_necesarias = [
+                "Número de documento Emisor",
+                "Número de Serie",
+                "Número de Comprobante"
+            ]
 
-            st.markdown(f"""
-            <div class='success-box'>
-            ✅ Coincidencias encontradas: {encontrados}
-            </div>
-            """, unsafe_allow_html=True)
+            faltantes = [
+                col for col in columnas_necesarias
+                if col not in df_sunat.columns
+            ]
 
-            st.subheader("📊 Resultado Cruce")
+            if len(faltantes) > 0:
 
-            st.dataframe(
-                df_resultado,
-                use_container_width=True,
-                height=650
-            )
+                st.error(f"""
+                ❌ Faltan columnas:
+                {faltantes}
+                """)
 
-            # =================================================
-            # DESCARGA EXCEL
-            # =================================================
-            excel_buffer = io.BytesIO()
+            else:
 
-            with pd.ExcelWriter(
-                excel_buffer,
-                engine="openpyxl"
-            ) as writer:
-
-                df_resultado.to_excel(
-                    writer,
-                    index=False
+                # =============================================
+                # CREAR CAR_GENERADO
+                # =============================================
+                df_sunat["CAR_GENERADO"] = df_sunat.apply(
+                    crear_car,
+                    axis=1
                 )
 
-            st.download_button(
-                label="📥 Descargar Resultado Excel",
-                data=excel_buffer.getvalue(),
-                file_name="resultado_cruce_sunat_sire.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                # =============================================
+                # MATCH
+                # =============================================
+                df_resultado = pd.merge(
+                    df_sunat,
+                    df_txt,
+                    left_on="CAR_GENERADO",
+                    right_on="CAR_TXT",
+                    how="left"
+                )
+
+                # =============================================
+                # ESTADO
+                # =============================================
+                df_resultado["MATCH"] = df_resultado[
+                    "ARCHIVO_TXT"
+                ].apply(
+                    lambda x:
+                    "ENCONTRADO"
+                    if pd.notnull(x)
+                    else "NO ENCONTRADO"
+                )
+
+                # =============================================
+                # CONTADOR
+                # =============================================
+                encontrados = (
+                    df_resultado["MATCH"]
+                    == "ENCONTRADO"
+                ).sum()
+
+                st.markdown(f"""
+                <div class='success-box'>
+                ✅ Coincidencias encontradas:
+                {encontrados}
+                </div>
+                """, unsafe_allow_html=True)
+
+                # =============================================
+                # RESULTADO
+                # =============================================
+                st.subheader("📊 Resultado Cruce")
+
+                st.dataframe(
+                    df_resultado,
+                    use_container_width=True,
+                    height=650
+                )
+
+                # =============================================
+                # DESCARGAR
+                # =============================================
+                excel_buffer = io.BytesIO()
+
+                with pd.ExcelWriter(
+                    excel_buffer,
+                    engine="openpyxl"
+                ) as writer:
+
+                    df_resultado.to_excel(
+                        writer,
+                        index=False
+                    )
+
+                st.download_button(
+                    label="📥 Descargar Resultado Excel",
+                    data=excel_buffer.getvalue(),
+                    file_name="resultado_cruce_sunat_sire.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+        except Exception as e:
+
+            st.error(f"❌ Error: {e}")
