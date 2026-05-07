@@ -426,33 +426,9 @@ if archivo_sunat and dfs_sire:
         # MOSTRAR RESULTADO
         # =====================================================
 
-        columnas_mostrar = [
-
-            "Número de documento Emisor",
-
-            "Nombre o Raz. Social del emisor",
-
-            "Fecha de emisión del comprobante",
-
-            "Tipo de Comprobante",
-
-            "Descripción del comprobante",
-
-            "Número de Serie",
-
-            "Número de Comprobante",
-
-            "Compras Gravadas Imputadas S/",
-
-            "IGV de las Compras gravadas imputadas [2]",
-
-            "MES_ENCONTRADO"
-
-        ]
-
         st.dataframe(
 
-            df_sunat[columnas_mostrar],
+            df_sunat,
 
             use_container_width=True
 
