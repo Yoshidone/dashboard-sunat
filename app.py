@@ -15,6 +15,7 @@ st.set_page_config(
 )
 
 st.title("📂 CRUCE SUNAT vs SIRE")
+st.markdown("Cruce automático entre SUNAT y SIRE")
 
 # =====================================================
 # SUBIR ARCHIVOS
@@ -31,10 +32,10 @@ excel_file = st.file_uploader(
 )
 
 # =====================================================
-# FUNCION MES
+# FUNCION OBTENER MES
 # =====================================================
 
-def obtener_mes_desde_txt(nombre_archivo):
+def obtener_mes(nombre_archivo):
 
     nombre_archivo = str(nombre_archivo)
 
@@ -87,7 +88,7 @@ if zip_file and excel_file:
         with st.spinner("Procesando archivos..."):
 
             # =====================================================
-            # LEER EXCEL
+            # LEER EXCEL SUNAT
             # =====================================================
 
             df_excel = pd.read_excel(
@@ -104,36 +105,36 @@ if zip_file and excel_file:
             # LIMPIAR EXCEL
             # =====================================================
 
-            df_excel["Nro Doc Identidad"] = (
-                df_excel["Nro Doc Identidad"]
+            df_excel["Número de documento Emisor"] = (
+                df_excel["Número de documento Emisor"]
                 .astype(str)
                 .str.strip()
             )
 
-            df_excel["Serie del CDP"] = (
-                df_excel["Serie del CDP"]
+            df_excel["Número de Serie"] = (
+                df_excel["Número de Serie"]
                 .astype(str)
                 .str.strip()
             )
 
-            df_excel["Nro CP o Doc. Nro Inicial (Rango)"] = (
-                df_excel["Nro CP o Doc. Nro Inicial (Rango)"]
+            df_excel["Número de Comprobante"] = (
+                df_excel["Número de Comprobante"]
                 .astype(str)
                 .str.replace(r"\.0$", "", regex=True)
                 .str.strip()
             )
 
             # =====================================================
-            # KEY EXCEL
+            # CREAR KEY EXCEL
             # =====================================================
 
             df_excel["KEY"] = (
 
-                df_excel["Nro Doc Identidad"] + "_" +
+                df_excel["Número de documento Emisor"] + "_" +
 
-                df_excel["Serie del CDP"] + "_" +
+                df_excel["Número de Serie"] + "_" +
 
-                df_excel["Nro CP o Doc. Nro Inicial (Rango)"]
+                df_excel["Número de Comprobante"]
 
             )
 
@@ -159,7 +160,7 @@ if zip_file and excel_file:
                 zip_ref.extractall(temp_dir)
 
             # =====================================================
-            # DICCIONARIO MATCH
+            # MAPA MATCH
             # =====================================================
 
             mapa_match = {}
@@ -181,17 +182,59 @@ if zip_file and excel_file:
 
                         try:
 
+                            # =====================================================
+                            # LEER TXT SIN CABECERA
+                            # =====================================================
+
                             df_txt = pd.read_csv(
                                 ruta_txt,
                                 sep="|",
                                 dtype=str,
-                                encoding="utf-8"
+                                encoding="utf-8",
+                                header=None
                             )
 
-                            df_txt.columns = [
-                                str(c).strip()
-                                for c in df_txt.columns
+                            # =====================================================
+                            # ASIGNAR COLUMNAS
+                            # =====================================================
+
+                            columnas = [
+
+                                "Periodo",
+                                "CAR SUNAT",
+                                "Fecha Emision",
+                                "Fecha Vcto",
+                                "Tipo CP",
+                                "Serie del CDP",
+                                "Año",
+                                "Nro CP o Doc. Nro Inicial (Rango)",
+                                "Nro Final",
+                                "Tipo Doc",
+                                "Nro Doc Identidad",
+                                "Apellidos",
+                                "Nombre",
+                                "BI Gravado",
+                                "IGV",
+                                "Adq Gravadas",
+                                "ISC",
+                                "ICBP",
+                                "Otros Tributos",
+                                "Total CP",
+                                "Moneda",
+                                "Tipo Cambio",
+                                "Fecha Doc Modificado",
+                                "Tipo CP Modificado",
+                                "Serie CP Modificado",
+                                "Nro CP Modificado",
+                                "ID Proyecto",
+                                "CUO",
+                                "Detraccion",
+                                "Medio Pago",
+                                "Estado"
+
                             ]
+
+                            df_txt.columns = columnas[:len(df_txt.columns)]
 
                             # =====================================================
                             # LIMPIAR TXT
@@ -217,7 +260,7 @@ if zip_file and excel_file:
                             )
 
                             # =====================================================
-                            # KEY TXT
+                            # CREAR KEY TXT
                             # =====================================================
 
                             df_txt["KEY"] = (
@@ -231,10 +274,10 @@ if zip_file and excel_file:
                             )
 
                             # =====================================================
-                            # MES
+                            # OBTENER MES
                             # =====================================================
 
-                            mes = obtener_mes_desde_txt(file)
+                            mes = obtener_mes(file)
 
                             # =====================================================
                             # GUARDAR MATCH
@@ -305,7 +348,7 @@ if zip_file and excel_file:
                 )
 
             # =====================================================
-            # MOSTRAR
+            # MOSTRAR TABLA
             # =====================================================
 
             st.dataframe(
@@ -315,7 +358,7 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # EXPORTAR
+            # EXPORTAR EXCEL
             # =====================================================
 
             output = BytesIO()
