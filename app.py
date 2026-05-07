@@ -5,9 +5,9 @@ import tempfile
 import os
 from io import BytesIO
 
-# =====================================================
+# =========================================================
 # CONFIG
-# =====================================================
+# =========================================================
 
 st.set_page_config(
     page_title="CRUCE SUNAT vs SIRE",
@@ -17,32 +17,35 @@ st.set_page_config(
 st.title("📂 CRUCE SUNAT vs SIRE")
 
 st.markdown("""
-Cruza:
+Cruce automático entre:
 
-SIRE:
+SIRE
 - Nro Doc Identidad
 - Serie del CDP
 - Nro CP o Doc. Nro Inicial (Rango)
 
 VS
 
-SUNAT:
+SUNAT
 - Número de documento Emisor
 - Número de Serie
 - Número de Comprobante
 
-y agrega el MES donde fue encontrado.
+El resultado mantiene TODO el formato SUNAT
+y agrega la columna:
+
+MES_ENCONTRADO
 """)
 
-# =====================================================
+# =========================================================
 # SUBIR ARCHIVOS
-# =====================================================
+# =========================================================
 
 modo = st.radio(
-    "Selecciona cómo subir archivos SIRE:",
+    "Selecciona carga SIRE",
     [
         "ZIP",
-        "CARPETA TXT"
+        "TXT"
     ]
 )
 
@@ -59,7 +62,7 @@ if modo == "ZIP":
 else:
 
     txt_files = st.file_uploader(
-        "📂 Subir TXT del SIRE",
+        "📂 Subir TXT SIRE",
         type=["txt"],
         accept_multiple_files=True
     )
@@ -69,55 +72,60 @@ excel_file = st.file_uploader(
     type=["xlsx"]
 )
 
-# =====================================================
+# =========================================================
 # FUNCION MES
-# =====================================================
+# =========================================================
 
-def obtener_mes(nombre_archivo):
+def obtener_mes(nombre):
 
-    nombre_archivo = str(nombre_archivo)
+    nombre = str(nombre)
 
-    if "202501" in nombre_archivo:
-        return "ENERO"
+    meses = {
 
-    elif "202502" in nombre_archivo:
-        return "FEBRERO"
+        "202501": "ENERO",
+        "202502": "FEBRERO",
+        "202503": "MARZO",
+        "202504": "ABRIL",
+        "202505": "MAYO",
+        "202506": "JUNIO",
+        "202507": "JULIO",
+        "202508": "AGOSTO",
+        "202509": "SEPTIEMBRE",
+        "202510": "OCTUBRE",
+        "202511": "NOVIEMBRE",
+        "202512": "DICIEMBRE"
 
-    elif "202503" in nombre_archivo:
-        return "MARZO"
+    }
 
-    elif "202504" in nombre_archivo:
-        return "ABRIL"
+    for k, v in meses.items():
 
-    elif "202505" in nombre_archivo:
-        return "MAYO"
-
-    elif "202506" in nombre_archivo:
-        return "JUNIO"
-
-    elif "202507" in nombre_archivo:
-        return "JULIO"
-
-    elif "202508" in nombre_archivo:
-        return "AGOSTO"
-
-    elif "202509" in nombre_archivo:
-        return "SEPTIEMBRE"
-
-    elif "202510" in nombre_archivo:
-        return "OCTUBRE"
-
-    elif "202511" in nombre_archivo:
-        return "NOVIEMBRE"
-
-    elif "202512" in nombre_archivo:
-        return "DICIEMBRE"
+        if k in nombre:
+            return v
 
     return "NO ENCONTRADO"
 
-# =====================================================
+# =========================================================
+# NORMALIZAR
+# =========================================================
+
+def limpiar(valor):
+
+    if pd.isna(valor):
+        return ""
+
+    valor = str(valor)
+
+    valor = valor.replace(".0", "")
+    valor = valor.replace("-", "")
+    valor = valor.strip()
+    valor = valor.upper()
+    valor = valor.lstrip("0")
+
+    return valor
+
+# =========================================================
 # PROCESAR
-# =====================================================
+# =========================================================
 
 if excel_file and (zip_file or txt_files):
 
@@ -126,17 +134,17 @@ if excel_file and (zip_file or txt_files):
         with st.spinner("Procesando archivos..."):
 
             # =====================================================
-            # LEER EXCEL SUNAT
+            # LEER SUNAT
             # =====================================================
 
-            df_excel = pd.read_excel(
+            df_sunat = pd.read_excel(
                 excel_file,
                 dtype=str
             )
 
-            df_excel.columns = [
+            df_sunat.columns = [
                 str(c).strip()
-                for c in df_excel.columns
+                for c in df_sunat.columns
             ]
 
             # =====================================================
@@ -145,23 +153,29 @@ if excel_file and (zip_file or txt_files):
 
             col_ruc = None
             col_serie = None
-            col_comprobante = None
+            col_comp = None
 
-            for col in df_excel.columns:
+            for col in df_sunat.columns:
 
                 nombre = str(col).lower()
 
-                if "documento" in nombre and "emisor" in nombre:
+                if (
+                    "documento" in nombre
+                    and "emisor" in nombre
+                ):
+
                     col_ruc = col
 
                 elif "serie" in nombre:
+
                     col_serie = col
 
                 elif (
                     "comprobante" in nombre
                     and "tipo" not in nombre
                 ):
-                    col_comprobante = col
+
+                    col_comp = col
 
             # =====================================================
             # VALIDAR
@@ -175,7 +189,7 @@ if excel_file and (zip_file or txt_files):
                 st.error("No se encontró columna Serie")
                 st.stop()
 
-            if col_comprobante is None:
+            if col_comp is None:
                 st.error("No se encontró columna Comprobante")
                 st.stop()
 
@@ -183,54 +197,46 @@ if excel_file and (zip_file or txt_files):
             # LIMPIAR SUNAT
             # =====================================================
 
-            df_excel[col_ruc] = (
-                df_excel[col_ruc]
-                .astype(str)
-                .str.strip()
-                .str.lstrip("0")
+            df_sunat["RUC_KEY"] = (
+                df_sunat[col_ruc]
+                .apply(limpiar)
             )
 
-            df_excel[col_serie] = (
-                df_excel[col_serie]
-                .astype(str)
-                .str.strip()
-                .str.upper()
+            df_sunat["SERIE_KEY"] = (
+                df_sunat[col_serie]
+                .apply(limpiar)
             )
 
-            df_excel[col_comprobante] = (
-                df_excel[col_comprobante]
-                .astype(str)
-                .str.replace(r"\.0$", "", regex=True)
-                .str.replace("-", "")
-                .str.strip()
-                .str.lstrip("0")
+            df_sunat["COMP_KEY"] = (
+                df_sunat[col_comp]
+                .apply(limpiar)
             )
 
             # =====================================================
             # KEY SUNAT
             # =====================================================
 
-            df_excel["KEY"] = (
+            df_sunat["KEY"] = (
 
-                df_excel[col_ruc] + "_" +
+                df_sunat["RUC_KEY"] + "_" +
 
-                df_excel[col_serie] + "_" +
+                df_sunat["SERIE_KEY"] + "_" +
 
-                df_excel[col_comprobante]
+                df_sunat["COMP_KEY"]
 
             )
 
             # =====================================================
-            # MAPA MATCH
+            # DATAFRAME SIRE
             # =====================================================
 
-            mapa_match = {}
+            lista_sire = []
 
             # =====================================================
-            # FUNCION PROCESAR TXT
+            # FUNCION TXT -> EXCEL
             # =====================================================
 
-            def procesar_txt(nombre_archivo, contenido):
+            def txt_a_dataframe(nombre_archivo, contenido):
 
                 try:
 
@@ -245,81 +251,35 @@ if excel_file and (zip_file or txt_files):
 
                         partes = linea.split("|")
 
-                        # evitar líneas cortas
-                        if len(partes) < 14:
+                        if len(partes) < 15:
                             continue
 
                         try:
 
-                            # =====================================================
-                            # CAMPOS REALES SIRE
-                            # =====================================================
+                            fila = {
 
-                            serie = (
-                                str(partes[5])
-                                .strip()
-                                .upper()
-                            )
+                                "RUC": limpiar(partes[13]),
 
-                            numero = (
-                                str(partes[7])
-                                .replace(".0", "")
-                                .replace("-", "")
-                                .strip()
-                                .lstrip("0")
-                            )
+                                "SERIE": limpiar(partes[5]),
 
-                            ruc = (
-                                str(partes[13])
-                                .strip()
-                                .lstrip("0")
-                            )
+                                "COMPROBANTE": limpiar(partes[7]),
 
-                            # =====================================================
-                            # VALIDAR
-                            # =====================================================
+                                "MES_ENCONTRADO": obtener_mes(
+                                    nombre_archivo
+                                )
 
-                            if (
-                                ruc == ""
-                                or serie == ""
-                                or numero == ""
-                            ):
-                                continue
+                            }
 
-                            # =====================================================
-                            # CREAR KEY
-                            # =====================================================
-
-                            key = (
-
-                                ruc + "_" +
-
-                                serie + "_" +
-
-                                numero
-
-                            )
-
-                            registros.append(key)
+                            registros.append(fila)
 
                         except:
                             pass
 
-                    # =====================================================
-                    # MES
-                    # =====================================================
+                    if len(registros) > 0:
 
-                    mes = obtener_mes(nombre_archivo)
+                        df = pd.DataFrame(registros)
 
-                    # =====================================================
-                    # GUARDAR MATCH
-                    # =====================================================
-
-                    for key in registros:
-
-                        if key not in mapa_match:
-
-                            mapa_match[key] = mes
+                        lista_sire.append(df)
 
                 except Exception as e:
 
@@ -356,19 +316,19 @@ if excel_file and (zip_file or txt_files):
 
                         if file.endswith(".txt"):
 
-                            ruta_txt = os.path.join(
+                            ruta = os.path.join(
                                 root,
                                 file
                             )
 
                             with open(
-                                ruta_txt,
+                                ruta,
                                 "rb"
                             ) as f:
 
                                 contenido = f.read()
 
-                            procesar_txt(
+                            txt_a_dataframe(
                                 file,
                                 contenido
                             )
@@ -381,31 +341,97 @@ if excel_file and (zip_file or txt_files):
 
                 for archivo in txt_files:
 
-                    procesar_txt(
+                    txt_a_dataframe(
                         archivo.name,
                         archivo.read()
                     )
 
             # =====================================================
-            # CRUCE FINAL
+            # VALIDAR SIRE
             # =====================================================
 
-            df_excel["MES_ENCONTRADO"] = (
-                df_excel["KEY"]
-                .map(mapa_match)
+            if len(lista_sire) == 0:
+
+                st.error(
+                    "No se pudo leer información del SIRE"
+                )
+
+                st.stop()
+
+            # =====================================================
+            # UNIR SIRE
+            # =====================================================
+
+            df_sire = pd.concat(
+                lista_sire,
+                ignore_index=True
             )
 
-            df_excel["MES_ENCONTRADO"] = (
-                df_excel["MES_ENCONTRADO"]
+            # =====================================================
+            # KEY SIRE
+            # =====================================================
+
+            df_sire["KEY"] = (
+
+                df_sire["RUC"] + "_" +
+
+                df_sire["SERIE"] + "_" +
+
+                df_sire["COMPROBANTE"]
+
+            )
+
+            # =====================================================
+            # MAPA MATCH
+            # =====================================================
+
+            mapa_mes = (
+
+                df_sire
+
+                .drop_duplicates(
+                    subset=["KEY"]
+                )
+
+                .set_index("KEY")[
+                    "MES_ENCONTRADO"
+                ]
+
+                .to_dict()
+
+            )
+
+            # =====================================================
+            # CRUCE
+            # =====================================================
+
+            df_sunat["MES_ENCONTRADO"] = (
+
+                df_sunat["KEY"]
+
+                .map(mapa_mes)
+
+            )
+
+            df_sunat["MES_ENCONTRADO"] = (
+
+                df_sunat["MES_ENCONTRADO"]
+
                 .fillna("NO ENCONTRADO")
+
             )
 
             # =====================================================
-            # ELIMINAR KEY
+            # ELIMINAR COLUMNAS AUX
             # =====================================================
 
-            df_excel = df_excel.drop(
-                columns=["KEY"]
+            df_sunat = df_sunat.drop(
+                columns=[
+                    "RUC_KEY",
+                    "SERIE_KEY",
+                    "COMP_KEY",
+                    "KEY"
+                ]
             )
 
             # =====================================================
@@ -414,7 +440,7 @@ if excel_file and (zip_file or txt_files):
 
             encontrados = (
 
-                df_excel["MES_ENCONTRADO"]
+                df_sunat["MES_ENCONTRADO"]
 
                 != "NO ENCONTRADO"
 
@@ -424,16 +450,16 @@ if excel_file and (zip_file or txt_files):
                 "✅ Cruce completado correctamente"
             )
 
-            col1, col2 = st.columns(2)
+            c1, c2 = st.columns(2)
 
-            with col1:
+            with c1:
 
                 st.metric(
                     "Total registros",
-                    len(df_excel)
+                    len(df_sunat)
                 )
 
-            with col2:
+            with c2:
 
                 st.metric(
                     "Coincidencias",
@@ -445,7 +471,7 @@ if excel_file and (zip_file or txt_files):
             # =====================================================
 
             st.dataframe(
-                df_excel,
+                df_sunat,
                 use_container_width=True,
                 height=700
             )
@@ -461,7 +487,7 @@ if excel_file and (zip_file or txt_files):
                 engine="openpyxl"
             ) as writer:
 
-                df_excel.to_excel(
+                df_sunat.to_excel(
                     writer,
                     index=False,
                     sheet_name="CRUCE_FINAL"
