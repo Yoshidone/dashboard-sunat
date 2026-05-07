@@ -18,37 +18,6 @@ st.title("📂 CRUCE SUNAT vs SIRE")
 st.markdown("Cruce por RUC + Serie + Número CP")
 
 # =====================================================
-# FUNCION MES
-# =====================================================
-
-def obtener_mes(periodo):
-
-    periodo = str(periodo)
-
-    meses = {
-        "01": "ENERO",
-        "02": "FEBRERO",
-        "03": "MARZO",
-        "04": "ABRIL",
-        "05": "MAYO",
-        "06": "JUNIO",
-        "07": "JULIO",
-        "08": "AGOSTO",
-        "09": "SEPTIEMBRE",
-        "10": "OCTUBRE",
-        "11": "NOVIEMBRE",
-        "12": "DICIEMBRE"
-    }
-
-    if len(periodo) >= 6:
-
-        mes = periodo[4:6]
-
-        return meses.get(mes, "NO ENCONTRADO")
-
-    return "NO ENCONTRADO"
-
-# =====================================================
 # SUBIR ARCHIVOS
 # =====================================================
 
@@ -139,25 +108,50 @@ if zip_file and excel_file:
                             ]
 
                             # =====================================================
-                            # MES
+                            # OBTENER MES DESDE NOMBRE TXT
                             # =====================================================
 
-                            if "Periodo" in df_txt.columns:
+                            nombre_archivo = str(file)
 
-                                df_txt["MES_SIRE"] = (
-                                    df_txt["Periodo"]
-                                    .apply(obtener_mes)
-                                )
+                            mes_txt = "NO ENCONTRADO"
 
-                            else:
+                            if "202501" in nombre_archivo:
+                                mes_txt = "ENERO"
 
-                                nombre_archivo = str(file)
+                            elif "202502" in nombre_archivo:
+                                mes_txt = "FEBRERO"
 
-                                periodo = nombre_archivo[11:17]
+                            elif "202503" in nombre_archivo:
+                                mes_txt = "MARZO"
 
-                                df_txt["MES_SIRE"] = (
-                                    obtener_mes(periodo)
-                                )
+                            elif "202504" in nombre_archivo:
+                                mes_txt = "ABRIL"
+
+                            elif "202505" in nombre_archivo:
+                                mes_txt = "MAYO"
+
+                            elif "202506" in nombre_archivo:
+                                mes_txt = "JUNIO"
+
+                            elif "202507" in nombre_archivo:
+                                mes_txt = "JULIO"
+
+                            elif "202508" in nombre_archivo:
+                                mes_txt = "AGOSTO"
+
+                            elif "202509" in nombre_archivo:
+                                mes_txt = "SEPTIEMBRE"
+
+                            elif "202510" in nombre_archivo:
+                                mes_txt = "OCTUBRE"
+
+                            elif "202511" in nombre_archivo:
+                                mes_txt = "NOVIEMBRE"
+
+                            elif "202512" in nombre_archivo:
+                                mes_txt = "DICIEMBRE"
+
+                            df_txt["MES_ENCONTRADO"] = mes_txt
 
                             lista_sire.append(df_txt)
 
@@ -166,6 +160,18 @@ if zip_file and excel_file:
                             st.warning(
                                 f"Error leyendo {file}: {e}"
                             )
+
+            # =====================================================
+            # VALIDAR
+            # =====================================================
+
+            if len(lista_sire) == 0:
+
+                st.error(
+                    "No se encontraron TXT válidos"
+                )
+
+                st.stop()
 
             # =====================================================
             # UNIR SIRE
@@ -223,7 +229,7 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # KEY SIRE
+            # CREAR KEY SIRE
             # =====================================================
 
             df_sire["KEY"] = (
@@ -237,7 +243,7 @@ if zip_file and excel_file:
             )
 
             # =====================================================
-            # KEY EXCEL
+            # CREAR KEY EXCEL
             # =====================================================
 
             df_excel["KEY"] = (
@@ -260,7 +266,7 @@ if zip_file and excel_file:
 
                 .drop_duplicates(subset=["KEY"])
 
-                .set_index("KEY")["MES_SIRE"]
+                .set_index("KEY")["MES_ENCONTRADO"]
 
                 .to_dict()
 
@@ -270,13 +276,17 @@ if zip_file and excel_file:
             # CRUCE
             # =====================================================
 
-            df_excel["MES_SIRE"] = (
+            df_excel["MES_ENCONTRADO"] = (
                 df_excel["KEY"]
                 .map(mapa_mes)
             )
 
-            df_excel["MES_SIRE"] = (
-                df_excel["MES_SIRE"]
+            # =====================================================
+            # RELLENAR VACIOS
+            # =====================================================
+
+            df_excel["MES_ENCONTRADO"] = (
+                df_excel["MES_ENCONTRADO"]
                 .fillna("NO ENCONTRADO")
             )
 
@@ -309,7 +319,7 @@ if zip_file and excel_file:
 
                 encontrados = (
 
-                    df_excel["MES_SIRE"]
+                    df_excel["MES_ENCONTRADO"]
 
                     != "NO ENCONTRADO"
 
